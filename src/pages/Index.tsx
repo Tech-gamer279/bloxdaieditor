@@ -109,47 +109,47 @@ const Index = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          <div className={`lg:col-span-3 ${activeTab !== "snippets" && activeTab !== "ranks" ? "hidden lg:block" : ""}`}>
-            {activeTab === "ranks" ? (
+          {/* Snippets / Ranks panel */}
+          <div className={`lg:col-span-3 ${activeTab === "ai" ? "hidden lg:block" : ""}`}>
+            {activeTab === "ranks" && (
               <div className="lg:hidden">
                 <Leaderboard />
               </div>
-            ) : null}
-            {activeTab === "snippets" || (activeTab !== "ranks") ? (
-              <div className={activeTab === "ranks" ? "hidden lg:block" : ""}>
-                {selectedSnippet ? (
-                  <SnippetView snippet={selectedSnippet} onBack={() => setSelectedSnippet(null)} />
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                        Shared Snippets
-                      </h2>
-                      <span className="text-xs text-muted-foreground">{snippets.length} snippets</span>
-                    </div>
-                    {snippets.length === 0 ? (
-                      <div className="text-center py-12 text-muted-foreground">
-                        <Code2 className="h-10 w-10 mx-auto mb-3 opacity-40" />
-                        <p className="text-sm">No snippets shared yet</p>
-                        <p className="text-xs mt-1">Be the first to share your Bloxd code!</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {snippets.map((snippet) => (
-                          <SnippetCard
-                            key={snippet.id}
-                            snippet={snippet}
-                            onClick={() => setSelectedSnippet(snippet)}
-                          />
-                        ))}
-                      </div>
-                    )}
+            )}
+            <div className={activeTab === "ranks" ? "hidden lg:block" : ""}>
+              {selectedSnippet ? (
+                <SnippetView snippet={selectedSnippet} onBack={() => setSelectedSnippet(null)} />
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                      Shared Snippets
+                    </h2>
+                    <span className="text-xs text-muted-foreground">{snippets.length} snippets</span>
                   </div>
-                )}
-              </div>
-            ) : null}
+                  {snippets.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Code2 className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                      <p className="text-sm">No snippets shared yet</p>
+                      <p className="text-xs mt-1">Be the first to share your Bloxd code!</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {snippets.map((snippet) => (
+                        <SnippetCard
+                          key={snippet.id}
+                          snippet={snippet}
+                          onClick={() => setSelectedSnippet(snippet)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
+          {/* AI Chat + Leaderboard panel */}
           <div className={`lg:col-span-2 space-y-4 ${activeTab === "ai" ? "" : "hidden lg:block"}`}>
             <AiChat />
             <div className="hidden lg:block">
