@@ -20,6 +20,7 @@ export type Database = {
           bio: string | null
           created_at: string
           id: string
+          rank_points: number
           updated_at: string
           user_id: string
           username: string | null
@@ -29,6 +30,7 @@ export type Database = {
           bio?: string | null
           created_at?: string
           id?: string
+          rank_points?: number
           updated_at?: string
           user_id: string
           username?: string | null
@@ -38,9 +40,75 @@ export type Database = {
           bio?: string | null
           created_at?: string
           id?: string
+          rank_points?: number
           updated_at?: string
           user_id?: string
           username?: string | null
+        }
+        Relationships: []
+      }
+      snippet_likes: {
+        Row: {
+          created_at: string
+          id: string
+          snippet_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          snippet_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          snippet_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "snippet_likes_snippet_id_fkey"
+            columns: ["snippet_id"]
+            isOneToOne: false
+            referencedRelation: "snippets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      snippets: {
+        Row: {
+          author_name: string
+          code: string
+          created_at: string
+          id: string
+          likes: number
+          title: string
+          updated_at: string
+          user_id: string
+          views: number
+        }
+        Insert: {
+          author_name?: string
+          code: string
+          created_at?: string
+          id?: string
+          likes?: number
+          title: string
+          updated_at?: string
+          user_id: string
+          views?: number
+        }
+        Update: {
+          author_name?: string
+          code?: string
+          created_at?: string
+          id?: string
+          likes?: number
+          title?: string
+          updated_at?: string
+          user_id?: string
+          views?: number
         }
         Relationships: []
       }
@@ -49,7 +117,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_rank_title: { Args: { points: number }; Returns: string }
     }
     Enums: {
       [_ in never]: never
