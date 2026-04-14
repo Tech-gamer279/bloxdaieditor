@@ -17,6 +17,7 @@ type TopSnippet = {
 };
 
 const RANK_CONFIG: Record<string, { color: string; icon: typeof Star }> = {
+  Owner: { color: "text-red-500", icon: Crown },
   Legend: { color: "text-yellow-400", icon: Crown },
   Master: { color: "text-purple-400", icon: Trophy },
   Expert: { color: "text-blue-400", icon: Medal },
@@ -27,6 +28,7 @@ const RANK_CONFIG: Record<string, { color: string; icon: typeof Star }> = {
 };
 
 function getRankTitle(points: number): string {
+  if (points >= 1000) return "Owner";
   if (points >= 500) return "Legend";
   if (points >= 200) return "Master";
   if (points >= 100) return "Expert";
