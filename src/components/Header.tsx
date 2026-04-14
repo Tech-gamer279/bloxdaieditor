@@ -1,11 +1,16 @@
 import { Button } from "@/components/ui/button";
-import { Code2, Plus } from "lucide-react";
+import { Code2, Plus, LogIn, LogOut } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 interface HeaderProps {
   onNewSnippet: () => void;
 }
 
 const Header = ({ onNewSnippet }: HeaderProps) => {
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
   return (
     <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
       <div className="container flex items-center justify-between h-14 px-4">
@@ -20,10 +25,27 @@ const Header = ({ onNewSnippet }: HeaderProps) => {
           </div>
         </div>
 
-        <Button variant="neon" size="sm" onClick={onNewSnippet}>
-          <Plus className="h-4 w-4" />
-          Share Code
-        </Button>
+        <div className="flex items-center gap-2">
+          {user ? (
+            <>
+              <span className="text-xs text-muted-foreground hidden sm:inline">
+                {user.email}
+              </span>
+              <Button variant="neon" size="sm" onClick={onNewSnippet}>
+                <Plus className="h-4 w-4" />
+                Share Code
+              </Button>
+              <Button variant="ghost" size="sm" onClick={signOut}>
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </>
+          ) : (
+            <Button variant="neon" size="sm" onClick={() => navigate("/auth")}>
+              <LogIn className="h-4 w-4" />
+              Sign In
+            </Button>
+          )}
+        </div>
       </div>
     </header>
   );
