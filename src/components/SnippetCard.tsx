@@ -1,6 +1,9 @@
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Copy, Heart, Eye } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Snippet {
   id: string;
@@ -18,6 +21,47 @@ interface SnippetCardProps {
 }
 
 const SnippetCard = ({ snippet, onClick }: SnippetCardProps) => {
+  const { user } = useAuth();
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(snippet.likes);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("snippet_likes")
+      .select("id")
+      .eq("snippet_id", snippet.id)
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => setLiked(!!data));
+  }, [user, snippet.id]);
+
+  useEffect(() => {
+    setLikeCount(snippet.likes);
+  }, [snippet.likes]);
+
+  const handleLike = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) {
+      toast({ title: "Sign in required", description: "You need to sign in to like snippets", variant: "destructive" });
+      return;
+    }
+    if (loading) return;
+    setLoading(true);
+
+    if (liked) {
+      setLiked(false);
+      setLikeCount((c) => c - 1);
+      await supabase.from("snippet_likes").delete().eq("snippet_id", snippet.id).eq("user_id", user.id);
+    } else {
+      setLiked(true);
+      setLikeCount((c) => c + 1);
+      await supabase.from("snippet_likes").insert({ snippet_id: snippet.id, user_id: user.id });
+    }
+    setLoading(false);
+  };
+
   const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation();
     await navigator.clipboard.writeText(snippet.code);
@@ -50,9 +94,14 @@ const SnippetCard = ({ snippet, onClick }: SnippetCardProps) => {
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span className="text-primary/70">@{snippet.author}</span>
         <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1">
-            <Heart className="h-3 w-3" /> {snippet.likes}
-          </span>
+          <button
+            onClick={handleLike}
+            className={`flex items-center gap-1 transition-colors ${
+              liked ? "text-red-500" : "hover:text-red-400"
+            }`}
+          >
+            <Heart className={`h-3 w-3 ${liked ? "fill-current" : ""}`} /> {likeCount}
+          </button>
           <span className="flex items-center gap-1">
             <Eye className="h-3 w-3" /> {snippet.views}
           </span>
