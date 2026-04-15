@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Copy, Heart, Eye } from "lucide-react";
+import { Copy, Heart, Eye, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -18,9 +18,10 @@ interface Snippet {
 interface SnippetCardProps {
   snippet: Snippet;
   onClick: () => void;
+  onDelete?: () => void;
 }
 
-const SnippetCard = ({ snippet, onClick }: SnippetCardProps) => {
+const SnippetCard = ({ snippet, onClick, onDelete }: SnippetCardProps) => {
   const { user } = useAuth();
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(snippet.likes);
@@ -67,6 +68,22 @@ const SnippetCard = ({ snippet, onClick }: SnippetCardProps) => {
     await navigator.clipboard.writeText(snippet.code);
     toast({ title: "Copied!", description: "Code copied to clipboard" });
   };
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) return;
+    const confirmed = window.confirm("Delete this snippet?");
+    if (!confirmed) return;
+    const { error } = await supabase.from("snippets").delete().eq("id", snippet.id).eq("user_id", user.id);
+    if (error) {
+      toast({ title: "Error", description: "Failed to delete snippet", variant: "destructive" });
+    } else {
+      toast({ title: "Deleted", description: "Snippet removed" });
+      onDelete?.();
+    }
+  };
+
+  const isOwner = user?.id === snippet.id ? false : !!user; // we need user_id on snippet
 
   return (
     <div
