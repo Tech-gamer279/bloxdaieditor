@@ -13,19 +13,21 @@ interface Snippet {
   likes: number;
   views: number;
   createdAt: string;
+  userId?: string;
 }
 
 interface SnippetCardProps {
   snippet: Snippet;
   onClick: () => void;
-  onDelete?: () => void;
 }
 
-const SnippetCard = ({ snippet, onClick, onDelete }: SnippetCardProps) => {
+const SnippetCard = ({ snippet, onClick }: SnippetCardProps) => {
   const { user } = useAuth();
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(snippet.likes);
   const [loading, setLoading] = useState(false);
+
+  const isOwner = user && snippet.userId === user.id;
 
   useEffect(() => {
     if (!user) return;
@@ -71,19 +73,16 @@ const SnippetCard = ({ snippet, onClick, onDelete }: SnippetCardProps) => {
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!user) return;
+    if (!isOwner) return;
     const confirmed = window.confirm("Delete this snippet?");
     if (!confirmed) return;
-    const { error } = await supabase.from("snippets").delete().eq("id", snippet.id).eq("user_id", user.id);
+    const { error } = await supabase.from("snippets").delete().eq("id", snippet.id);
     if (error) {
       toast({ title: "Error", description: "Failed to delete snippet", variant: "destructive" });
     } else {
       toast({ title: "Deleted", description: "Snippet removed" });
-      onDelete?.();
     }
   };
-
-  const isOwner = user?.id === snippet.id ? false : !!user; // we need user_id on snippet
 
   return (
     <div
@@ -94,14 +93,26 @@ const SnippetCard = ({ snippet, onClick, onDelete }: SnippetCardProps) => {
         <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors truncate pr-2">
           {snippet.title}
         </h3>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary"
-          onClick={handleCopy}
-        >
-          <Copy className="h-3.5 w-3.5" />
-        </Button>
+        <div className="flex items-center gap-1 shrink-0">
+          {isOwner && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+              onClick={handleDelete}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-primary"
+            onClick={handleCopy}
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
 
       <pre className="code-editor text-muted-foreground bg-secondary/30 rounded p-3 mb-3 overflow-hidden max-h-[80px] text-xs">
