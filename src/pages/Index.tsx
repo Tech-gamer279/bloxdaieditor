@@ -6,7 +6,8 @@ import SnippetView from "@/components/SnippetView";
 import NewSnippetDialog from "@/components/NewSnippetDialog";
 import AiChat from "@/components/AiChat";
 import Leaderboard from "@/components/Leaderboard";
-import { Code2, Sparkles, Trophy } from "lucide-react";
+import Forum from "@/components/Forum";
+import { Code2, Sparkles, Trophy, MessageSquare } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
@@ -16,7 +17,7 @@ const Index = () => {
   const [snippets, setSnippets] = useState<Snippet[]>([]);
   const [selectedSnippet, setSelectedSnippet] = useState<Snippet | null>(null);
   const [showNewDialog, setShowNewDialog] = useState(false);
-  const [activeTab, setActiveTab] = useState<"snippets" | "ai" | "ranks">("snippets");
+  const [activeTab, setActiveTab] = useState<"snippets" | "ai" | "ranks" | "forum">("snippets");
 
   const fetchSnippets = async () => {
     const { data } = await supabase
@@ -96,6 +97,17 @@ const Index = () => {
             AI Coder
           </button>
           <button
+            onClick={() => setActiveTab("forum")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === "forum"
+                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <MessageSquare className="h-4 w-4" />
+            Forum
+          </button>
+          <button
             onClick={() => setActiveTab("ranks")}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               activeTab === "ranks"
@@ -111,12 +123,15 @@ const Index = () => {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* Snippets / Ranks panel */}
           <div className={`lg:col-span-3 ${activeTab === "ai" ? "hidden lg:block" : ""}`}>
+            {activeTab === "forum" && (
+              <Forum />
+            )}
             {activeTab === "ranks" && (
               <div className="lg:hidden">
                 <Leaderboard />
               </div>
             )}
-            <div className={activeTab === "ranks" ? "hidden lg:block" : ""}>
+            <div className={activeTab === "ranks" || activeTab === "forum" ? "hidden lg:block" : ""}>
               {selectedSnippet ? (
                 <SnippetView snippet={selectedSnippet} onBack={() => setSelectedSnippet(null)} />
               ) : (
