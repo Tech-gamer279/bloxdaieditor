@@ -34,6 +34,7 @@ const Index = () => {
           likes: s.likes,
           views: s.views,
           createdAt: s.created_at,
+          userId: s.user_id,
         }))
       );
     }
