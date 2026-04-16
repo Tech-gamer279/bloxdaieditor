@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Send, Bot, User, Sparkles, Copy, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { toast } from "@/hooks/use-toast";
 
 type Msg = { role: "user" | "assistant"; content: string };
@@ -135,15 +137,32 @@ const AiChat = () => {
                 <div className="prose prose-sm prose-invert max-w-none [&_pre]:relative [&_pre]:bg-background [&_pre]:rounded [&_pre]:p-3 [&_pre]:pr-10 [&_pre]:text-xs [&_pre]:my-2 [&_code]:text-primary [&_code]:font-mono [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm">
                   <ReactMarkdown
                     components={{
-                      pre({ children, ...props }) {
-                        const codeEl = (children as any)?.props;
-                        const codeText = codeEl?.children || "";
+                      code({ className, children, ...props }) {
+                        const match = /language-(\w+)/.exec(className || "");
+                        const codeString = String(children).replace(/\n$/, "");
+                        if (match) {
+                          return (
+                            <div className="relative group not-prose my-2">
+                              <SyntaxHighlighter
+                                style={oneDark}
+                                language={match[1]}
+                                PreTag="div"
+                                customStyle={{ margin: 0, borderRadius: "0.375rem", fontSize: "0.75rem" }}
+                              >
+                                {codeString}
+                              </SyntaxHighlighter>
+                              <CopyButton text={codeString} />
+                            </div>
+                          );
+                        }
                         return (
-                          <div className="relative group">
-                            <pre {...props}>{children}</pre>
-                            <CopyButton text={String(codeText)} />
-                          </div>
+                          <code className={className} {...props}>
+                            {children}
+                          </code>
                         );
+                      },
+                      pre({ children }) {
+                        return <>{children}</>;
                       },
                     }}
                   >
