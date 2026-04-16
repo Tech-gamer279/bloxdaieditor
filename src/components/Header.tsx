@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Code2, Plus, LogIn, LogOut } from "lucide-react";
+import { Code2, Plus, LogIn, LogOut, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 
@@ -31,6 +31,9 @@ const Header = ({ onNewSnippet }: HeaderProps) => {
               <span className="text-xs text-muted-foreground hidden sm:inline">
                 {user.email}
               </span>
+              <Button variant="ghost" size="sm" onClick={() => navigate("/profile")}>
+                <User className="h-4 w-4" />
+              </Button>
               <Button variant="neon" size="sm" onClick={onNewSnippet}>
                 <Plus className="h-4 w-4" />
                 Share Code
