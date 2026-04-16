@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Send, Bot, User, Sparkles, Copy, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { toast } from "@/hooks/use-toast";
 
 type Msg = { role: "user" | "assistant"; content: string };
