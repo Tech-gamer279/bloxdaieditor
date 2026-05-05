@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Hash, Send, Smile, Trash2 } from "lucide-react";
+import { Hash, Send, Smile, Trash2, Paperclip, Flag, Plus } from "lucide-react";
 import type { Message, Reaction } from "./types";
 import { toast } from "@/hooks/use-toast";
 
@@ -21,6 +21,8 @@ const ChatRoom = ({ channelId, channelName, userId, username, isAdmin }: Props) 
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [text, setText] = useState("");
   const [pickerFor, setPickerFor] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const fetchAll = async () => {
@@ -66,6 +68,58 @@ const ChatRoom = ({ channelId, channelName, userId, username, isAdmin }: Props) 
     if (error) toast({ title: "Failed", description: error.message, variant: "destructive" });
   };
 
+  const uploadFile = async (file: File) => {
+    if (!file) return;
+    setUploading(true);
+    const filePath = `attachments/chat/${channelId}/${Date.now()}-${file.name}`;
+    const { error: uploadError } = await supabase.storage.from("attachments").upload(filePath, file, { upsert: true });
+    if (uploadError) {
+      toast({ title: "Upload failed", description: uploadError.message, variant: "destructive" });
+      setUploading(false);
+      return;
+    }
+
+    const { data: urlData, error: urlError } = supabase.storage.from("attachments").getPublicUrl(filePath);
+    if (urlError || !urlData.publicUrl) {
+      toast({ title: "Upload failed", description: urlError?.message || "Could not create file URL", variant: "destructive" });
+      setUploading(false);
+      return;
+    }
+
+    const content = `📎 ${file.name} ${urlData.publicUrl}`;
+    const { error } = await supabase.from("messages").insert({
+      channel_id: channelId, user_id: userId, author_name: username, content,
+    });
+    if (error) {
+      toast({ title: "Failed to send file", description: error.message, variant: "destructive" });
+    }
+    setUploading(false);
+  };
+
+  const onFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await uploadFile(file);
+    event.target.value = "";
+  };
+
+  const addCustomReaction = async (messageId: string) => {
+    const emoji = window.prompt("Enter a custom emoji or reaction text");
+    if (!emoji?.trim()) return;
+    await react(messageId, emoji.trim());
+  };
+
+  const reportMessage = async (messageId: string) => {
+    const reason = window.prompt("Why are you reporting this message?");
+    if (!reason?.trim()) return;
+    const { error } = await supabase.rpc("report_message", { _message_id: messageId, _reason: reason.trim() });
+    if (error) {
+      toast({ title: "Report failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Reported", description: "Thanks! The team has been notified." });
+  };
+
   const react = async (messageId: string, emoji: string) => {
     setPickerFor(null);
     const existing = reactions.find((r) => r.message_id === messageId && r.user_id === userId && r.emoji === emoji);
@@ -91,6 +145,19 @@ const ChatRoom = ({ channelId, channelName, userId, username, isAdmin }: Props) 
     return Array.from(map.entries());
   };
 
+  const renderMessageContent = (content: string) => {
+    return content.split(/(https?:\/\/[^\s]+)/g).map((segment, index) => {
+      if (/^https?:\/\//.test(segment)) {
+        return (
+          <a key={index} href={segment} target="_blank" rel="noreferrer" className="underline text-primary">
+            {segment}
+          </a>
+        );
+      }
+      return <span key={index}>{segment}</span>;
+    });
+  };
+
   return (
     <div className="flex-1 flex flex-col min-w-0">
       <div className="px-4 py-3 border-b border-border flex items-center gap-2">
@@ -113,7 +180,7 @@ const ChatRoom = ({ channelId, channelName, userId, username, isAdmin }: Props) 
                   <span className="font-semibold text-sm">{m.author_name}</span>
                   <span className="text-[10px] text-muted-foreground">{new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                 </div>
-                <div className="text-sm text-foreground/90 whitespace-pre-wrap break-words">{m.content}</div>
+                <div className="text-sm text-foreground/90 whitespace-pre-wrap break-words">{renderMessageContent(m.content)}</div>
                 <div className="flex flex-wrap gap-1 mt-1">
                   {groupedReactions(m.id).map(([emoji, { count, mine }]) => (
                     <button
@@ -129,6 +196,12 @@ const ChatRoom = ({ channelId, channelName, userId, username, isAdmin }: Props) 
               <div className="opacity-0 group-hover:opacity-100 flex items-start gap-1 relative">
                 <button onClick={() => setPickerFor(pickerFor === m.id ? null : m.id)} className="p-1 hover:bg-secondary rounded">
                   <Smile className="h-3.5 w-3.5" />
+                </button>
+                <button onClick={() => addCustomReaction(m.id)} className="p-1 hover:bg-secondary rounded">
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+                <button onClick={() => reportMessage(m.id)} className="p-1 hover:bg-secondary rounded text-amber-500">
+                  <Flag className="h-3.5 w-3.5" />
                 </button>
                 {(own || isAdmin) && (
                   <button onClick={() => deleteMsg(m.id)} className="p-1 hover:bg-destructive/20 rounded text-destructive">
@@ -150,15 +223,21 @@ const ChatRoom = ({ channelId, channelName, userId, username, isAdmin }: Props) 
       <div className="p-3 border-t border-border">
         <form
           onSubmit={(e) => { e.preventDefault(); send(); }}
-          className="flex gap-2"
+          className="flex gap-2 items-center"
         >
+          <input ref={fileInputRef} type="file" className="hidden" onChange={onFileChange} />
+          <Button type="button" variant="ghost" size="icon" className="h-10 w-10" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
+            <Paperclip className="h-4 w-4" />
+          </Button>
           <Input
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder={`Message #${channelName}`}
             className="flex-1"
           />
-          <Button type="submit" variant="neon" size="icon"><Send className="h-4 w-4" /></Button>
+          <Button type="submit" variant="neon" size="icon" disabled={uploading}>
+            <Send className="h-4 w-4" />
+          </Button>
         </form>
       </div>
     </div>

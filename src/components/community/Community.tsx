@@ -26,11 +26,15 @@ const Community = () => {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [chanOpen, setChanOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [chanName, setChanName] = useState("");
   const [chanType, setChanType] = useState<"text" | "voice">("text");
+  const [banTarget, setBanTarget] = useState<Member | null>(null);
+  const [banDuration, setBanDuration] = useState<number>(0);
+  const [banReason, setBanReason] = useState("");
 
   const [dm, setDm] = useState<{ id: string; otherId: string; otherName: string } | null>(null);
 
@@ -53,32 +57,32 @@ const Community = () => {
   };
   useEffect(() => { if (user) loadServers(); }, [user]);
 
+  const loadServerData = async (server: Server) => {
+    const [chRes, memRes] = await Promise.all([
+      supabase.from("channels").select("*").eq("server_id", server.id).order("position"),
+      supabase.from("server_members").select("*").eq("server_id", server.id),
+    ]);
+    const ch = (chRes.data || []) as Channel[];
+    setChannels(ch);
+    const mems = (memRes.data || []) as Member[];
+    if (mems.length) {
+      const { data: profs } = await supabase.from("profiles").select("user_id,username,avatar_url").in("user_id", mems.map((m) => m.user_id));
+      const pm = new Map((profs || []).map((p) => [p.user_id, p]));
+      setMembers(mems.map((m) => ({ ...m, username: pm.get(m.user_id)?.username, avatar_url: pm.get(m.user_id)?.avatar_url })));
+    } else setMembers([]);
+    if (!activeChannel || activeChannel.server_id !== server.id) {
+      setActiveChannel(ch.find((c) => c.type === "text") || ch[0] || null);
+    }
+  };
+
   // Load channels & members for active server
   useEffect(() => {
     if (!activeServer) { setChannels([]); setMembers([]); setActiveChannel(null); return; }
-    const load = async () => {
-      const [chRes, memRes] = await Promise.all([
-        supabase.from("channels").select("*").eq("server_id", activeServer.id).order("position"),
-        supabase.from("server_members").select("*").eq("server_id", activeServer.id),
-      ]);
-      const ch = (chRes.data || []) as Channel[];
-      setChannels(ch);
-      const mems = (memRes.data || []) as Member[];
-      // enrich with profile
-      if (mems.length) {
-        const { data: profs } = await supabase.from("profiles").select("user_id,username,avatar_url").in("user_id", mems.map((m) => m.user_id));
-        const pm = new Map((profs || []).map((p) => [p.user_id, p]));
-        setMembers(mems.map((m) => ({ ...m, username: pm.get(m.user_id)?.username, avatar_url: pm.get(m.user_id)?.avatar_url })));
-      } else setMembers([]);
-      if (!activeChannel || activeChannel.server_id !== activeServer.id) {
-        setActiveChannel(ch.find((c) => c.type === "text") || ch[0] || null);
-      }
-    };
-    load();
+    loadServerData(activeServer);
     const sub = supabase
       .channel(`server-${activeServer.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "channels", filter: `server_id=eq.${activeServer.id}` }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "server_members", filter: `server_id=eq.${activeServer.id}` }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "channels", filter: `server_id=eq.${activeServer.id}` }, () => loadServerData(activeServer))
+      .on("postgres_changes", { event: "*", schema: "public", table: "server_members", filter: `server_id=eq.${activeServer.id}` }, () => loadServerData(activeServer))
       .subscribe();
     return () => { supabase.removeChannel(sub); };
     // eslint-disable-next-line
@@ -134,6 +138,29 @@ const Community = () => {
     await loadServers();
   };
 
+  const handleBan = async () => {
+    if (!activeServer || !banTarget || !user) return;
+    const durationDays = banDuration;
+    const { error } = await supabase.rpc("ban_server_member", {
+      _server_id: activeServer.id,
+      _user_id: banTarget.user_id,
+      _duration_days: durationDays,
+      _reason: banReason.trim() || null,
+    } as any);
+
+    if (error) {
+      toast({ title: "Ban failed", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "User banned", description: `${banTarget.username || "Member"} has been banned.` });
+    setBanTarget(null);
+    setBanDuration(0);
+    setBanReason("");
+    await loadServers();
+    if (activeServer) await loadServerData(activeServer);
+  };
+
   const openDM = async (otherId: string) => {
     if (!user || otherId === user.id) return;
     const { data, error } = await supabase.rpc("get_or_create_dm", { _other: otherId });
@@ -168,6 +195,7 @@ const Community = () => {
         onSelect={setActiveChannel}
         onCreateChannel={() => setChanOpen(true)}
         onLeave={leaveServer}
+        onInvite={() => setInviteOpen(true)}
       />
       {activeServer && activeChannel ? (
         activeChannel.type === "text" ? (
@@ -180,7 +208,7 @@ const Community = () => {
           {activeServer ? "Pick a channel" : "Welcome to the community"}
         </div>
       )}
-      {activeServer && <MemberList members={members} onlineIds={onlineIds} onDM={openDM} />}
+      {activeServer && <MemberList members={members} onlineIds={onlineIds} onDM={openDM} onBan={(member) => setBanTarget(member)} currentUserId={user.id} isAdmin={isAdmin} />}
 
       {dm && (
         <DMPanel conversationId={dm.id} otherUserId={dm.otherId} otherName={dm.otherName} userId={user.id} onClose={() => setDm(null)} />
@@ -204,6 +232,54 @@ const Community = () => {
           <DialogFooter>
             <Button variant="ghost" onClick={() => setJoinOpen(false)}>Cancel</Button>
             <Button variant="neon" onClick={joinServer}>Join</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Server invite</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Share this invite code with friends to let them join your server.</p>
+            <div className="rounded-lg border border-border bg-background p-3 text-sm font-semibold">{activeServer?.invite_code || "-"}</div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setInviteOpen(false)}>Close</Button>
+            <Button variant="neon" onClick={() => { navigator.clipboard.writeText(activeServer?.invite_code || ""); toast({ title: "Invite copied", description: activeServer?.invite_code }); }}>
+              Copy code
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!banTarget} onOpenChange={(open) => { if (!open) setBanTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ban member</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">Select how long this member should be banned from the server.</p>
+            <div className="grid grid-cols-3 gap-2">
+              {[{ label: "Permanent", value: 0 }, { label: "1 day", value: 1 }, { label: "7 days", value: 7 }, { label: "30 days", value: 30 }].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setBanDuration(option.value)}
+                  className={`rounded-lg border px-3 py-2 text-sm ${banDuration === option.value ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-foreground"}`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <Input value={banReason} onChange={(e) => setBanReason(e.target.value)} placeholder="Reason (optional)" />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setBanTarget(null); setBanDuration(0); setBanReason(""); }}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleBan}>
+              Ban member
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
