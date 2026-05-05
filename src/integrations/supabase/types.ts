@@ -14,6 +14,94 @@ export type Database = {
   }
   public: {
     Tables: {
+      channels: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          position: number
+          server_id: string
+          type: Database["public"]["Enums"]["channel_type"]
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          position?: number
+          server_id: string
+          type?: Database["public"]["Enums"]["channel_type"]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number
+          server_id?: string
+          type?: Database["public"]["Enums"]["channel_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channels_server_id_fkey"
+            columns: ["server_id"]
+            isOneToOne: false
+            referencedRelation: "servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dm_conversations: {
+        Row: {
+          created_at: string
+          id: string
+          user_a: string
+          user_b: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          user_a: string
+          user_b: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          user_a?: string
+          user_b?: string
+        }
+        Relationships: []
+      }
+      dm_messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dm_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "dm_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       forum_posts: {
         Row: {
           author_name: string
@@ -85,6 +173,76 @@ export type Database = {
           },
         ]
       }
+      message_reactions: {
+        Row: {
+          created_at: string
+          emoji: string
+          id: string
+          message_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          emoji: string
+          id?: string
+          message_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          emoji?: string
+          id?: string
+          message_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_reactions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          author_name: string
+          channel_id: string
+          content: string
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          author_name?: string
+          channel_id: string
+          content: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          author_name?: string
+          channel_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -115,6 +273,68 @@ export type Database = {
           updated_at?: string
           user_id?: string
           username?: string | null
+        }
+        Relationships: []
+      }
+      server_members: {
+        Row: {
+          id: string
+          joined_at: string
+          role: Database["public"]["Enums"]["server_role"]
+          server_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string
+          role?: Database["public"]["Enums"]["server_role"]
+          server_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string
+          role?: Database["public"]["Enums"]["server_role"]
+          server_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "server_members_server_id_fkey"
+            columns: ["server_id"]
+            isOneToOne: false
+            referencedRelation: "servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      servers: {
+        Row: {
+          created_at: string
+          icon_url: string | null
+          id: string
+          invite_code: string
+          name: string
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          icon_url?: string | null
+          id?: string
+          invite_code?: string
+          name: string
+          owner_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          icon_url?: string | null
+          id?: string
+          invite_code?: string
+          name?: string
+          owner_id?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -183,15 +403,109 @@ export type Database = {
         }
         Relationships: []
       }
+      voice_participants: {
+        Row: {
+          channel_id: string
+          id: string
+          joined_at: string
+          user_id: string
+          username: string | null
+        }
+        Insert: {
+          channel_id: string
+          id?: string
+          joined_at?: string
+          user_id: string
+          username?: string | null
+        }
+        Update: {
+          channel_id?: string
+          id?: string
+          joined_at?: string
+          user_id?: string
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voice_participants_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      voice_signals: {
+        Row: {
+          channel_id: string
+          created_at: string
+          from_user: string
+          id: string
+          kind: string
+          payload: Json
+          to_user: string
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string
+          from_user: string
+          id?: string
+          kind: string
+          payload: Json
+          to_user: string
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string
+          from_user?: string
+          id?: string
+          kind?: string
+          payload?: Json
+          to_user?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voice_signals_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      channel_server: { Args: { _channel: string }; Returns: string }
+      create_server: {
+        Args: { _icon?: string; _name: string }
+        Returns: string
+      }
+      get_or_create_dm: { Args: { _other: string }; Returns: string }
       get_rank_title: { Args: { points: number }; Returns: string }
+      is_dm_participant: {
+        Args: { _conv: string; _user: string }
+        Returns: boolean
+      }
+      is_server_admin: {
+        Args: { _server: string; _user: string }
+        Returns: boolean
+      }
+      is_server_member: {
+        Args: { _server: string; _user: string }
+        Returns: boolean
+      }
+      is_server_owner: {
+        Args: { _server: string; _user: string }
+        Returns: boolean
+      }
+      join_server_by_invite: { Args: { _code: string }; Returns: string }
     }
     Enums: {
-      [_ in never]: never
+      channel_type: "text" | "voice"
+      server_role: "owner" | "admin" | "member"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -318,6 +632,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      channel_type: ["text", "voice"],
+      server_role: ["owner", "admin", "member"],
+    },
   },
 } as const
