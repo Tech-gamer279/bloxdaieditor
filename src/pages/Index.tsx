@@ -7,7 +7,8 @@ import NewSnippetDialog from "@/components/NewSnippetDialog";
 import AiChat from "@/components/AiChat";
 import Leaderboard from "@/components/Leaderboard";
 import Forum from "@/components/Forum";
-import { Code2, Sparkles, Trophy, MessageSquare } from "lucide-react";
+import Community from "@/components/community/Community";
+import { Code2, Sparkles, Trophy, MessageSquare, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
@@ -17,7 +18,7 @@ const Index = () => {
   const [snippets, setSnippets] = useState<Snippet[]>([]);
   const [selectedSnippet, setSelectedSnippet] = useState<Snippet | null>(null);
   const [showNewDialog, setShowNewDialog] = useState(false);
-  const [activeTab, setActiveTab] = useState<"snippets" | "ai" | "ranks" | "forum">("snippets");
+  const [activeTab, setActiveTab] = useState<"snippets" | "ai" | "ranks" | "forum" | "community">("snippets");
 
   const fetchSnippets = async () => {
     const { data } = await supabase
@@ -96,6 +97,17 @@ const Index = () => {
           >
             <Sparkles className="h-4 w-4" />
             AI Coder
+          </button>
+          <button
+            onClick={() => setActiveTab("community")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === "community"
+                ? "bg-pink-500/15 text-pink-400 border border-pink-500/30"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Users className="h-4 w-4" />
+            Community
           </button>
           <button
             onClick={() => setActiveTab("forum")}
