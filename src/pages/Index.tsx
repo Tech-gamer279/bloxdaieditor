@@ -133,6 +133,9 @@ const Index = () => {
           </button>
         </div>
 
+        {activeTab === "community" ? (
+          <Community />
+        ) : (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* Snippets / Ranks panel */}
           <div className={`lg:col-span-3 ${activeTab === "ai" ? "hidden lg:block" : ""}`}>
