@@ -8,11 +8,12 @@ import AiChat from "@/components/AiChat";
 import Leaderboard from "@/components/Leaderboard";
 import Forum from "@/components/Forum";
 import Community from "@/components/community/Community";
-import { Code2, Sparkles, Trophy, MessageSquare, Users, ImagePlus, UserPlus } from "lucide-react";
+import { Code2, Sparkles, Trophy, MessageSquare, Users, ImagePlus, UserPlus, BookOpen } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import MediaUpload from "@/components/MediaUpload";
 import FriendManager from "@/components/FriendManager";
+import UpdateLog from "@/components/UpdateLog";
 import { toast } from "@/hooks/use-toast";
 
 const Index = () => {
@@ -20,7 +21,7 @@ const Index = () => {
   const [snippets, setSnippets] = useState<Snippet[]>([]);
   const [selectedSnippet, setSelectedSnippet] = useState<Snippet | null>(null);
   const [showNewDialog, setShowNewDialog] = useState(false);
-  const [activeTab, setActiveTab] = useState<"snippets" | "ai" | "ranks" | "forum" | "community" | "media" | "friends">("snippets");
+  const [activeTab, setActiveTab] = useState<"snippets" | "ai" | "ranks" | "forum" | "community" | "media" | "friends" | "update-log">("snippets");
 
   const fetchSnippets = async () => {
     const { data } = await supabase
@@ -145,6 +146,17 @@ const Index = () => {
             Friends
           </button>
           <button
+            onClick={() => setActiveTab("update-log")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === "update-log"
+                ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <BookOpen className="h-4 w-4" />
+            Update Log
+          </button>
+          <button
             onClick={() => setActiveTab("ranks")}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               activeTab === "ranks"
@@ -178,6 +190,10 @@ const Index = () => {
                 Sign in to add friends and manage your friend list.
               </div>
             )}
+          </div>
+        ) : activeTab === "update-log" ? (
+          <div className="grid grid-cols-1 gap-6">
+            <UpdateLog />
           </div>
         ) : (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">

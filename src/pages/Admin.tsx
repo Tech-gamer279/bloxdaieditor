@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, BookOpen, ClipboardList, Cloud, Compass, Flag, GitBranch, Gift, Key, Layers, Lock, Mail, MessageSquare, PieChart, RefreshCcw, Scroll, Settings2, ShieldCheck, Sparkles, Star, User, UserPlus } from "lucide-react";
 import FriendManager from "@/components/FriendManager";
 import MediaUpload from "@/components/MediaUpload";
+import UpdateLog from "@/components/UpdateLog";
 
 const AdminPage = () => {
   const { user, loading } = useAuth();
@@ -150,17 +151,7 @@ const AdminPage = () => {
           </TabsContent>
 
           <TabsContent value="update-log">
-            <div className="space-y-4">
-              {updateLog.map((item) => (
-                <div key={item.date} className="rounded-lg border border-border bg-card p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <p className="text-sm font-semibold text-foreground">{item.date}</p>
-                    <span className="text-xs text-muted-foreground">Logged update</span>
-                  </div>
-                  <p className="mt-2 text-sm text-muted-foreground">{item.change}</p>
-                </div>
-              ))}
-            </div>
+            <UpdateLog />
           </TabsContent>
 
           <TabsContent value="media-library">
