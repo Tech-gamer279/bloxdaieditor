@@ -49,41 +49,6 @@ export type Database = {
           },
         ]
       }
-      custom_emojis: {
-        Row: {
-          created_at: string
-          created_by: string
-          id: string
-          image_url: string
-          name: string
-          server_id: string
-        }
-        Insert: {
-          created_at?: string
-          created_by: string
-          id?: string
-          image_url: string
-          name: string
-          server_id: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string
-          id?: string
-          image_url?: string
-          name?: string
-          server_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "custom_emojis_server_id_fkey"
-            columns: ["server_id"]
-            isOneToOne: false
-            referencedRelation: "servers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       dm_conversations: {
         Row: {
           created_at: string
@@ -242,9 +207,6 @@ export type Database = {
       }
       messages: {
         Row: {
-          attachment_name: string | null
-          attachment_type: string | null
-          attachment_url: string | null
           author_name: string
           channel_id: string
           content: string
@@ -254,9 +216,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          attachment_name?: string | null
-          attachment_type?: string | null
-          attachment_url?: string | null
           author_name?: string
           channel_id: string
           content: string
@@ -266,9 +225,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          attachment_name?: string | null
-          attachment_type?: string | null
-          attachment_url?: string | null
           author_name?: string
           channel_id?: string
           content?: string
@@ -320,162 +276,6 @@ export type Database = {
         }
         Relationships: []
       }
-      reports: {
-        Row: {
-          created_at: string
-          id: string
-          reason: string
-          reporter_id: string
-          server_id: string | null
-          status: string
-          target_id: string
-          target_type: string
-          target_user_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          reason: string
-          reporter_id: string
-          server_id?: string | null
-          status?: string
-          target_id: string
-          target_type: string
-          target_user_id?: string | null
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          reason?: string
-          reporter_id?: string
-          server_id?: string | null
-          status?: string
-          target_id?: string
-          target_type?: string
-          target_user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "reports_server_id_fkey"
-            columns: ["server_id"]
-            isOneToOne: false
-            referencedRelation: "servers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      server_bans: {
-        Row: {
-          banned_by: string
-          created_at: string
-          expires_at: string | null
-          id: string
-          reason: string | null
-          server_id: string
-          user_id: string
-        }
-        Insert: {
-          banned_by: string
-          created_at?: string
-          expires_at?: string | null
-          id?: string
-          reason?: string | null
-          server_id: string
-          user_id: string
-        }
-        Update: {
-          banned_by?: string
-          created_at?: string
-          expires_at?: string | null
-          id?: string
-          reason?: string | null
-          server_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "server_bans_server_id_fkey"
-            columns: ["server_id"]
-            isOneToOne: false
-            referencedRelation: "servers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      server_bots: {
-        Row: {
-          bot_key: string
-          config: Json
-          enabled: boolean
-          id: string
-          installed_at: string
-          server_id: string
-        }
-        Insert: {
-          bot_key: string
-          config?: Json
-          enabled?: boolean
-          id?: string
-          installed_at?: string
-          server_id: string
-        }
-        Update: {
-          bot_key?: string
-          config?: Json
-          enabled?: boolean
-          id?: string
-          installed_at?: string
-          server_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "server_bots_server_id_fkey"
-            columns: ["server_id"]
-            isOneToOne: false
-            referencedRelation: "servers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      server_member_roles: {
-        Row: {
-          assigned_at: string
-          id: string
-          role_id: string
-          server_id: string
-          user_id: string
-        }
-        Insert: {
-          assigned_at?: string
-          id?: string
-          role_id: string
-          server_id: string
-          user_id: string
-        }
-        Update: {
-          assigned_at?: string
-          id?: string
-          role_id?: string
-          server_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "server_member_roles_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "server_roles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "server_member_roles_server_id_fkey"
-            columns: ["server_id"]
-            isOneToOne: false
-            referencedRelation: "servers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       server_members: {
         Row: {
           id: string
@@ -501,85 +301,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "server_members_server_id_fkey"
-            columns: ["server_id"]
-            isOneToOne: false
-            referencedRelation: "servers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      server_posts: {
-        Row: {
-          author_name: string
-          content: string
-          created_at: string
-          id: string
-          pinned: boolean
-          server_id: string
-          title: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          author_name?: string
-          content: string
-          created_at?: string
-          id?: string
-          pinned?: boolean
-          server_id: string
-          title: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          author_name?: string
-          content?: string
-          created_at?: string
-          id?: string
-          pinned?: boolean
-          server_id?: string
-          title?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "server_posts_server_id_fkey"
-            columns: ["server_id"]
-            isOneToOne: false
-            referencedRelation: "servers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      server_roles: {
-        Row: {
-          color: string
-          created_at: string
-          id: string
-          name: string
-          position: number
-          server_id: string
-        }
-        Insert: {
-          color?: string
-          created_at?: string
-          id?: string
-          name: string
-          position?: number
-          server_id: string
-        }
-        Update: {
-          color?: string
-          created_at?: string
-          id?: string
-          name?: string
-          position?: number
-          server_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "server_roles_server_id_fkey"
             columns: ["server_id"]
             isOneToOne: false
             referencedRelation: "servers"
@@ -757,10 +478,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      ban_member: {
-        Args: { _days: number; _reason: string; _server: string; _user: string }
-        Returns: undefined
-      }
       channel_server: { Args: { _channel: string }; Returns: string }
       create_server: {
         Args: { _icon?: string; _name: string }
@@ -781,10 +498,6 @@ export type Database = {
         Returns: boolean
       }
       is_server_owner: {
-        Args: { _server: string; _user: string }
-        Returns: boolean
-      }
-      is_user_banned: {
         Args: { _server: string; _user: string }
         Returns: boolean
       }

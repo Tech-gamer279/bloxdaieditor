@@ -45,15 +45,19 @@ const Auth = () => {
   };
 
   const handleGoogleLogin = async () => {
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-    if (result.error) {
-      toast({ title: "Error", description: result.error.message, variant: "destructive" });
-      return;
+    try {
+      const result = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
+      });
+      if (result.error) {
+        toast({ title: "Error", description: result.error.message, variant: "destructive" });
+        return;
+      }
+      if (result.redirected) return;
+      navigate("/");
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "OAuth sign in failed", variant: "destructive" });
     }
-    if (result.redirected) return;
-    navigate("/");
   };
 
   return (

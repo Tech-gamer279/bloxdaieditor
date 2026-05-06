@@ -1,9 +1,9 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Code2, Plus, LogIn, LogOut, User, Settings as SettingsIcon } from "lucide-react";
+import { Code2, Plus, LogIn, LogOut, User, Settings, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
-import SettingsDialog from "./SettingsDialog";
+import SettingsDialog from "@/components/SettingsDialog";
 
 interface HeaderProps {
   onNewSnippet: () => void;
@@ -29,16 +29,19 @@ const Header = ({ onNewSnippet }: HeaderProps) => {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)} title="Settings">
-            <SettingsIcon className="h-4 w-4" />
-          </Button>
           {user ? (
             <>
               <span className="text-xs text-muted-foreground hidden sm:inline">
                 {user.email}
               </span>
+              <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)}>
+                <Settings className="h-4 w-4" />
+              </Button>
               <Button variant="ghost" size="sm" onClick={() => navigate("/profile")}>
                 <User className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => navigate("/admin")}>
+                <ShieldCheck className="h-4 w-4" />
               </Button>
               <Button variant="neon" size="sm" onClick={onNewSnippet}>
                 <Plus className="h-4 w-4" />
@@ -56,7 +59,7 @@ const Header = ({ onNewSnippet }: HeaderProps) => {
           )}
         </div>
       </div>
-      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </header>
   );
 };

@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import FriendManager from "@/components/FriendManager";
+import MediaUpload from "@/components/MediaUpload";
 import {
   ArrowLeft,
   Camera,
@@ -85,6 +87,10 @@ const ProfilePage = () => {
     fetchProfile();
     fetchStats();
   }, [user]);
+
+  if (!user) {
+    return null;
+  }
 
   const fetchProfile = async () => {
     if (!user) return;
@@ -252,6 +258,9 @@ const ProfilePage = () => {
             </div>
           ))}
         </div>
+
+        <MediaUpload userId={user.id} title="Profile Media" description="Upload images, screenshots, and attachments to personalize your profile." uploadFolder="profile-media" />
+        <FriendManager userId={user.id} />
 
         {/* Edit form */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
