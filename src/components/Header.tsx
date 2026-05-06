@@ -1,7 +1,9 @@
 import { Button } from "@/components/ui/button";
-import { Code2, Plus, LogIn, LogOut, User } from "lucide-react";
+import { Code2, Plus, LogIn, LogOut, User, Settings as SettingsIcon } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import SettingsDialog from "./SettingsDialog";
 
 interface HeaderProps {
   onNewSnippet: () => void;
@@ -10,6 +12,7 @@ interface HeaderProps {
 const Header = ({ onNewSnippet }: HeaderProps) => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
     <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
@@ -26,6 +29,9 @@ const Header = ({ onNewSnippet }: HeaderProps) => {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)} title="Settings">
+            <SettingsIcon className="h-4 w-4" />
+          </Button>
           {user ? (
             <>
               <span className="text-xs text-muted-foreground hidden sm:inline">
@@ -50,6 +56,7 @@ const Header = ({ onNewSnippet }: HeaderProps) => {
           )}
         </div>
       </div>
+      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </header>
   );
 };
