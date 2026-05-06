@@ -60,7 +60,6 @@ const Header = ({ onNewSnippet }: HeaderProps) => {
         </div>
       </div>
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-      </div>
     </header>
   );
 };
