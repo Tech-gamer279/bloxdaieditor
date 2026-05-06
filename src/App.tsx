@@ -15,8 +15,8 @@ import Admin from "./pages/Admin.tsx";
 const queryClient = new QueryClient();
 
 const App = () => (
-  <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-    <QueryClientProvider client={queryClient}>
+  <QueryClientProvider client={queryClient}>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <SettingsProvider>
         <TooltipProvider>
           <Toaster />
@@ -35,8 +35,8 @@ const App = () => (
           </BrowserRouter>
         </TooltipProvider>
       </SettingsProvider>
-    </QueryClientProvider>
-  </ThemeProvider>
+    </ThemeProvider>
+  </QueryClientProvider>
 );
 
 export default App;
