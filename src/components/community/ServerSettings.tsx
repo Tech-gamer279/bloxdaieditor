@@ -224,10 +224,10 @@ const ServerSettings = ({ open, onClose, server, members, isAdmin, isOwner }: Pr
               {isAdmin && (
                 <div className="flex gap-2 items-end">
                   <div className="flex-1"><Label>Emoji name</Label><Input value={newEmojiName} onChange={(e) => setNewEmojiName(e.target.value)} placeholder="bloxd_happy" /></div>
-                  <Label className="cursor-pointer">
+                  <label className="cursor-pointer">
                     <input type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && uploadEmoji(e.target.files[0])} />
-                    <Button asChild><span><Smile className="h-4 w-4" /> Upload</span></Button>
-                  </Label>
+                    <span className="inline-flex items-center gap-2 h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90"><Smile className="h-4 w-4" /> Upload</span>
+                  </label>
                 </div>
               )}
               <div className="grid grid-cols-4 gap-2">
