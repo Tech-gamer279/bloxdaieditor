@@ -8,9 +8,11 @@ import AiChat from "@/components/AiChat";
 import Leaderboard from "@/components/Leaderboard";
 import Forum from "@/components/Forum";
 import Community from "@/components/community/Community";
-import { Code2, Sparkles, Trophy, MessageSquare, Users } from "lucide-react";
+import { Code2, Sparkles, Trophy, MessageSquare, Users, ImagePlus, UserPlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import MediaUpload from "@/components/MediaUpload";
+import FriendManager from "@/components/FriendManager";
 import { toast } from "@/hooks/use-toast";
 
 const Index = () => {
@@ -18,7 +20,7 @@ const Index = () => {
   const [snippets, setSnippets] = useState<Snippet[]>([]);
   const [selectedSnippet, setSelectedSnippet] = useState<Snippet | null>(null);
   const [showNewDialog, setShowNewDialog] = useState(false);
-  const [activeTab, setActiveTab] = useState<"snippets" | "ai" | "ranks" | "forum" | "community">("snippets");
+  const [activeTab, setActiveTab] = useState<"snippets" | "ai" | "ranks" | "forum" | "community" | "media" | "friends">("snippets");
 
   const fetchSnippets = async () => {
     const { data } = await supabase
@@ -121,6 +123,28 @@ const Index = () => {
             Forum
           </button>
           <button
+            onClick={() => setActiveTab("media")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === "media"
+                ? "bg-sky-500/15 text-sky-400 border border-sky-500/30"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <ImagePlus className="h-4 w-4" />
+            Media Upload
+          </button>
+          <button
+            onClick={() => setActiveTab("friends")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === "friends"
+                ? "bg-violet-500/15 text-violet-400 border border-violet-500/30"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <UserPlus className="h-4 w-4" />
+            Friends
+          </button>
+          <button
             onClick={() => setActiveTab("ranks")}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               activeTab === "ranks"
@@ -135,6 +159,26 @@ const Index = () => {
 
         {activeTab === "community" ? (
           <Community />
+        ) : activeTab === "media" ? (
+          <div className="grid grid-cols-1 gap-6">
+            {user ? (
+              <MediaUpload userId={user.id} />
+            ) : (
+              <div className="rounded-lg border border-border bg-card p-6 text-center text-muted-foreground">
+                Sign in to upload media and manage your files.
+              </div>
+            )}
+          </div>
+        ) : activeTab === "friends" ? (
+          <div className="grid grid-cols-1 gap-6">
+            {user ? (
+              <FriendManager userId={user.id} />
+            ) : (
+              <div className="rounded-lg border border-border bg-card p-6 text-center text-muted-foreground">
+                Sign in to add friends and manage your friend list.
+              </div>
+            )}
+          </div>
         ) : (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* Snippets / Ranks panel */}

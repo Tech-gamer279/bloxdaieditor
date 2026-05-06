@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Code2, Plus, LogIn, LogOut, User, Settings } from "lucide-react";
+import { Code2, Plus, LogIn, LogOut, User, Settings, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import SettingsDialog from "@/components/SettingsDialog";
@@ -39,6 +39,9 @@ const Header = ({ onNewSnippet }: HeaderProps) => {
               </Button>
               <Button variant="ghost" size="sm" onClick={() => navigate("/profile")}>
                 <User className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => navigate("/admin")}>
+                <ShieldCheck className="h-4 w-4" />
               </Button>
               <Button variant="neon" size="sm" onClick={onNewSnippet}>
                 <Plus className="h-4 w-4" />
