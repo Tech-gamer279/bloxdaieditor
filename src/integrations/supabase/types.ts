@@ -682,6 +682,27 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       voice_participants: {
         Row: {
           channel_id: string
@@ -768,6 +789,13 @@ export type Database = {
       }
       get_or_create_dm: { Args: { _other: string }; Returns: string }
       get_rank_title: { Args: { points: number }; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       is_dm_participant: {
         Args: { _conv: string; _user: string }
         Returns: boolean
@@ -791,6 +819,7 @@ export type Database = {
       join_server_by_invite: { Args: { _code: string }; Returns: string }
     }
     Enums: {
+      app_role: "admin" | "moderator" | "user"
       channel_type: "text" | "voice"
       server_role: "owner" | "admin" | "member"
     }
@@ -920,6 +949,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "moderator", "user"],
       channel_type: ["text", "voice"],
       server_role: ["owner", "admin", "member"],
     },

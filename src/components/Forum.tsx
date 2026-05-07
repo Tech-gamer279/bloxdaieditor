@@ -104,7 +104,7 @@ const Forum = () => {
       title,
       content,
       user_id: user.id,
-      author_name: profile?.username || user.email || "anonymous",
+      author_name: profile?.username || "anonymous",
     });
     setSubmitting(false);
     if (error) {
@@ -133,7 +133,7 @@ const Forum = () => {
       post_id: selectedPost.id,
       content,
       user_id: user.id,
-      author_name: profile?.username || user.email || "anonymous",
+      author_name: profile?.username || "anonymous",
     });
     setSubmitting(false);
     if (error) {

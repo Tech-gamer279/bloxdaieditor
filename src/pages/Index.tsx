@@ -242,7 +242,13 @@ const Index = () => {
 
           {/* AI Chat + Leaderboard panel */}
           <div className={`lg:col-span-2 space-y-4 ${activeTab === "ai" ? "" : "hidden lg:block"}`}>
-            <AiChat />
+            {user ? (
+              <AiChat />
+            ) : (
+              <div className="rounded-lg border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+                Sign in to use the AI assistant.
+              </div>
+            )}
             <div className="hidden lg:block">
               <Leaderboard />
             </div>

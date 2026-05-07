@@ -1,8 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, BookOpen, ClipboardList, Cloud, Compass, Flag, GitBranch, Gift, Key, Layers, Lock, Mail, MessageSquare, PieChart, RefreshCcw, Scroll, Settings2, ShieldCheck, Sparkles, Star, User, UserPlus } from "lucide-react";
 import FriendManager from "@/components/FriendManager";
@@ -12,16 +14,35 @@ import UpdateLog from "@/components/UpdateLog";
 const AdminPage = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (loading) return;
+    if (!user) {
       navigate("/auth");
+      return;
     }
+    (async () => {
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      if (error || !data) {
+        toast({ title: "Access denied", description: "Admin role required", variant: "destructive" });
+        setIsAdmin(false);
+        navigate("/");
+        return;
+      }
+      setIsAdmin(true);
+    })();
   }, [user, loading, navigate]);
 
-  if (!user) {
+  if (!user || isAdmin !== true) {
     return null;
   }
+
 
   const updateLog = [
     { date: "2026-05-06", change: "Added admin dashboard with 20 editor features and tabs." },
