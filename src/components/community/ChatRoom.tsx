@@ -172,7 +172,14 @@ const ChatRoom = ({ channelId, channelName, userId, username, isAdmin }: Props) 
   const reportMessage = async (messageId: string) => {
     const reason = window.prompt("Why are you reporting this message?");
     if (!reason?.trim()) return;
-    const { error } = await supabase.rpc("report_message", { _message_id: messageId, _reason: reason.trim() });
+    const msg = messages.find((m) => m.id === messageId);
+    const { error } = await supabase.from("reports").insert({
+      reporter_id: userId,
+      target_type: "message",
+      target_id: messageId,
+      target_user_id: msg?.user_id ?? null,
+      reason: reason.trim(),
+    });
     if (error) {
       toast({ title: "Report failed", description: error.message, variant: "destructive" });
       return;
