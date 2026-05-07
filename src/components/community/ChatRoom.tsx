@@ -16,46 +16,106 @@ interface Props {
 
 const EMOJIS = ["👍", "❤️", "😂", "🔥", "🎉", "👀"];
 
+const PAGE_SIZE = 50;
+
 const ChatRoom = ({ channelId, channelName, userId, username, isAdmin }: Props) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [text, setText] = useState("");
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef(true);
+  const initialLoadRef = useRef(true);
 
-  const fetchAll = async () => {
-    const { data: msgs } = await supabase
+  const loadReactionsFor = async (ids: string[]) => {
+    if (!ids.length) return [] as Reaction[];
+    const { data } = await supabase.from("message_reactions").select("*").in("message_id", ids);
+    return (data || []) as Reaction[];
+  };
+
+  const loadInitial = async () => {
+    const { data } = await supabase
       .from("messages")
       .select("*")
       .eq("channel_id", channelId)
-      .order("created_at", { ascending: true })
-      .limit(200);
-    setMessages((msgs || []) as Message[]);
-    if (msgs && msgs.length) {
-      const { data: rx } = await supabase
-        .from("message_reactions")
-        .select("*")
-        .in("message_id", msgs.map((m) => m.id));
-      setReactions((rx || []) as Reaction[]);
-    } else {
-      setReactions([]);
+      .order("created_at", { ascending: false })
+      .limit(PAGE_SIZE);
+    const ordered = ((data || []) as Message[]).slice().reverse();
+    setMessages(ordered);
+    setHasMore((data?.length || 0) === PAGE_SIZE);
+    setReactions(await loadReactionsFor(ordered.map((m) => m.id)));
+    initialLoadRef.current = true;
+  };
+
+  const loadOlder = async () => {
+    if (loadingMore || !hasMore || messages.length === 0) return;
+    setLoadingMore(true);
+    const oldest = messages[0];
+    const el = scrollRef.current;
+    const prevHeight = el?.scrollHeight ?? 0;
+    const prevTop = el?.scrollTop ?? 0;
+    const { data } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("channel_id", channelId)
+      .lt("created_at", oldest.created_at)
+      .order("created_at", { ascending: false })
+      .limit(PAGE_SIZE);
+    const older = ((data || []) as Message[]).slice().reverse();
+    if (older.length) {
+      setMessages((prev) => [...older, ...prev]);
+      const newRx = await loadReactionsFor(older.map((m) => m.id));
+      setReactions((prev) => [...prev, ...newRx]);
+      requestAnimationFrame(() => {
+        if (el) el.scrollTop = prevTop + (el.scrollHeight - prevHeight);
+      });
     }
+    if ((data?.length || 0) < PAGE_SIZE) setHasMore(false);
+    setLoadingMore(false);
+  };
+
+  const handleNewMessage = async (id: string) => {
+    const { data } = await supabase.from("messages").select("*").eq("id", id).maybeSingle();
+    if (!data) return;
+    setMessages((prev) => (prev.find((m) => m.id === id) ? prev : [...prev, data as Message]));
   };
 
   useEffect(() => {
-    fetchAll();
+    loadInitial();
     const ch = supabase
       .channel(`chat-${channelId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages", filter: `channel_id=eq.${channelId}` }, () => fetchAll())
-      .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, () => fetchAll())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `channel_id=eq.${channelId}` }, (p) => handleNewMessage((p.new as Message).id))
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages", filter: `channel_id=eq.${channelId}` }, (p) => setMessages((prev) => prev.filter((m) => m.id !== (p.old as Message).id)))
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `channel_id=eq.${channelId}` }, (p) => setMessages((prev) => prev.map((m) => (m.id === (p.new as Message).id ? (p.new as Message) : m))))
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "message_reactions" }, (p) => setReactions((prev) => [...prev, p.new as Reaction]))
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "message_reactions" }, (p) => setReactions((prev) => prev.filter((r) => r.id !== (p.old as Reaction).id)))
       .subscribe();
     return () => { supabase.removeChannel(ch); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channelId]);
 
+  const onScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    if (el.scrollTop < 60 && hasMore && !loadingMore) loadOlder();
+  };
+
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    const el = scrollRef.current;
+    if (!el) return;
+    if (initialLoadRef.current) {
+      el.scrollTop = el.scrollHeight;
+      initialLoadRef.current = false;
+      return;
+    }
+    if (isAtBottomRef.current) {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    }
   }, [messages]);
 
   const send = async () => {
@@ -79,9 +139,9 @@ const ChatRoom = ({ channelId, channelName, userId, username, isAdmin }: Props) 
       return;
     }
 
-    const { data: urlData, error: urlError } = supabase.storage.from("attachments").getPublicUrl(filePath);
-    if (urlError || !urlData.publicUrl) {
-      toast({ title: "Upload failed", description: urlError?.message || "Could not create file URL", variant: "destructive" });
+    const { data: urlData } = supabase.storage.from("attachments").getPublicUrl(filePath);
+    if (!urlData?.publicUrl) {
+      toast({ title: "Upload failed", description: "Could not create file URL", variant: "destructive" });
       setUploading(false);
       return;
     }
@@ -112,7 +172,14 @@ const ChatRoom = ({ channelId, channelName, userId, username, isAdmin }: Props) 
   const reportMessage = async (messageId: string) => {
     const reason = window.prompt("Why are you reporting this message?");
     if (!reason?.trim()) return;
-    const { error } = await supabase.rpc("report_message", { _message_id: messageId, _reason: reason.trim() });
+    const msg = messages.find((m) => m.id === messageId);
+    const { error } = await supabase.from("reports").insert({
+      reporter_id: userId,
+      target_type: "message",
+      target_id: messageId,
+      target_user_id: msg?.user_id ?? null,
+      reason: reason.trim(),
+    });
     if (error) {
       toast({ title: "Report failed", description: error.message, variant: "destructive" });
       return;

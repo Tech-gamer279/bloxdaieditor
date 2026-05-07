@@ -53,7 +53,7 @@ const FriendManager = ({ userId }: FriendManagerProps) => {
       const { data, error } = await supabase
         .from("profiles")
         .select("user_id,username,avatar_url")
-        .ilike("username", `%${trimmed}%")
+        .ilike("username", `%${trimmed}%`)
         .limit(1)
         .single();
 
@@ -68,7 +68,7 @@ const FriendManager = ({ userId }: FriendManagerProps) => {
       }
 
       if (friends.some((friend) => friend.id === data.user_id)) {
-        toast({ title: "Already added", description: `${data.username || "This user"} is already a friend.`, variant: "warning" });
+        toast({ title: "Already added", description: `${data.username || "This user"} is already a friend.` });
         return;
       }
 

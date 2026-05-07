@@ -141,12 +141,12 @@ const Community = () => {
   const handleBan = async () => {
     if (!activeServer || !banTarget || !user) return;
     const durationDays = banDuration;
-    const { error } = await supabase.rpc("ban_server_member", {
-      _server_id: activeServer.id,
-      _user_id: banTarget.user_id,
-      _duration_days: durationDays,
+    const { error } = await supabase.rpc("ban_member", {
+      _server: activeServer.id,
+      _user: banTarget.user_id,
       _reason: banReason.trim() || null,
-    } as any);
+      _days: durationDays,
+    });
 
     if (error) {
       toast({ title: "Ban failed", description: error.message, variant: "destructive" });
