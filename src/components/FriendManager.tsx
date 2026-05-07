@@ -68,7 +68,7 @@ const FriendManager = ({ userId }: FriendManagerProps) => {
       }
 
       if (friends.some((friend) => friend.id === data.user_id)) {
-        toast({ title: "Already added", description: `${data.username || "This user"} is already a friend.`, variant: "warning" });
+        toast({ title: "Already added", description: `${data.username || "This user"} is already a friend.` });
         return;
       }
 
