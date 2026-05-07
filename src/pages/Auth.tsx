@@ -5,6 +5,7 @@ import { lovable } from "@/integrations/lovable/index";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { Code2, LogIn, UserPlus, Mail, Lock, User } from "lucide-react";
+import Onboarding from "@/components/Onboarding";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -13,6 +14,7 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,10 +35,7 @@ const Auth = () => {
           },
         });
         if (error) throw error;
-        toast({
-          title: "Check your email",
-          description: "We sent you a verification link to confirm your account.",
-        });
+        setShowOnboarding(true);
       }
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -59,6 +58,10 @@ const Auth = () => {
       toast({ title: "Error", description: error.message || "OAuth sign in failed", variant: "destructive" });
     }
   };
+
+  if (showOnboarding) {
+    return <Onboarding onComplete={() => navigate("/")} />;
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
