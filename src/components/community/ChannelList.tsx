@@ -15,7 +15,7 @@ interface Props {
   onInvite: () => void;
 }
 
-const ChannelList = ({ server, channels, activeChannelId, isAdmin, onSelect, onCreateChannel, onLeave }: Props) => {
+const ChannelList = ({ server, channels, activeChannelId, isAdmin, onSelect, onCreateChannel, onLeave, onInvite }: Props) => {
   if (!server) {
     return (
       <div className="w-56 shrink-0 bg-card/40 border-r border-border flex items-center justify-center text-xs text-muted-foreground p-4 text-center">
