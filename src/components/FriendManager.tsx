@@ -53,7 +53,7 @@ const FriendManager = ({ userId }: FriendManagerProps) => {
       const { data, error } = await supabase
         .from("profiles")
         .select("user_id,username,avatar_url")
-        .ilike("username", `%${trimmed}%")
+        .ilike("username", `%${trimmed}%`)
         .limit(1)
         .single();
 
