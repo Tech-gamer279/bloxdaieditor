@@ -139,9 +139,9 @@ const ChatRoom = ({ channelId, channelName, userId, username, isAdmin }: Props) 
       return;
     }
 
-    const { data: urlData, error: urlError } = supabase.storage.from("attachments").getPublicUrl(filePath);
-    if (urlError || !urlData.publicUrl) {
-      toast({ title: "Upload failed", description: urlError?.message || "Could not create file URL", variant: "destructive" });
+    const { data: urlData } = supabase.storage.from("attachments").getPublicUrl(filePath);
+    if (!urlData?.publicUrl) {
+      toast({ title: "Upload failed", description: "Could not create file URL", variant: "destructive" });
       setUploading(false);
       return;
     }
