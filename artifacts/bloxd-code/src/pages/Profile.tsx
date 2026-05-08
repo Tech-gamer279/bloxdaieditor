@@ -1,7 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
-import { useApi, apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -11,9 +10,15 @@ import FriendManager from "@/components/FriendManager";
 import {
   ArrowLeft, Save, Code2, Heart, Eye, Trophy, User, Award,
 } from "lucide-react";
+import {
+  useGetProfile,
+  useUpsertProfile,
+  getGetProfileQueryKey,
+} from "@workspace/api-client-react";
+import { apiFetch } from "@/lib/api";
+import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
-type Profile = { userId: string; username: string | null; bio: string | null; avatarUrl: string | null; rankPoints: number };
-type Snip = { id: string; title: string; likes: number; views: number };
 type BadgeEntry = { id: string; userId: string; badgeId: string; grantedAt: string; badge: { id: string; name: string; description: string; emoji: string; color: string } };
 
 function getRankTitle(p: number) {
@@ -35,53 +40,54 @@ const RANK_COLORS: Record<string, string> = {
 
 const ProfilePage = () => {
   const { user } = useAuth();
-  const api = useApi();
+  const qc = useQueryClient();
   const [, navigate] = useLocation();
-
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [snippets, setSnippets] = useState<Snip[]>([]);
   const [badges, setBadges] = useState<BadgeEntry[]>([]);
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
 
-  const fetchAll = useCallback(async () => {
-    if (!user) return;
-    try {
-      const data = await apiFetch(`/profiles/${user.id}`) as { profile: Profile | null; snippets: Snip[] };
-      setProfile(data.profile);
-      setSnippets(data.snippets);
-      setUsername(data.profile?.username || user.username || "");
-      setBio(data.profile?.bio || "");
-    } catch {}
-    try {
-      const b = await apiFetch(`/badges/user/${user.id}`) as BadgeEntry[];
-      setBadges(b);
-    } catch {}
-    setLoading(false);
-  }, [user]);
+  const { data, isLoading } = useGetProfile(user?.id ?? "", {
+    query: { enabled: !!user?.id, queryKey: getGetProfileQueryKey(user?.id ?? "") },
+  });
+
+  const profile = data?.profile ?? null;
+  const snippets = data?.snippets ?? [];
 
   useEffect(() => {
-    if (!user) { navigate("/sign-in"); return; }
-    fetchAll();
-  }, [user, fetchAll, navigate]);
+    if (profile) {
+      setUsername(profile.username ?? user?.username ?? "");
+      setBio(profile.bio ?? "");
+    } else if (user) {
+      setUsername(user.username ?? "");
+    }
+  }, [profile, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    apiFetch(`/badges/user/${user.id}`)
+      .then((b) => setBadges(b as BadgeEntry[]))
+      .catch(() => {});
+  }, [user]);
+
+  const upsertMutation = useUpsertProfile({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetProfileQueryKey(user!.id) });
+        toast({ title: "Saved", description: "Profile updated successfully" });
+      },
+      onError: (err) => {
+        toast({ title: "Failed", description: err.message, variant: "destructive" });
+      },
+    },
+  });
+
+  useEffect(() => {
+    if (!user) { navigate("/sign-in"); }
+  }, [user, navigate]);
 
   if (!user) return null;
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const updated = await api("/profiles", { method: "PUT", body: JSON.stringify({ username, bio }) }) as Profile;
-      setProfile(updated);
-      toast({ title: "Saved", description: "Profile updated successfully" });
-    } catch (e: unknown) {
-      toast({ title: "Failed", description: (e as Error).message, variant: "destructive" });
-    }
-    setSaving(false);
-  };
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Loading profile...</div>
@@ -120,7 +126,6 @@ const ProfilePage = () => {
           </div>
         </div>
 
-        {/* Badges */}
         {badges.length > 0 && (
           <div className="rounded-lg border border-border bg-card p-4 space-y-3">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
@@ -142,7 +147,6 @@ const ProfilePage = () => {
           </div>
         )}
 
-        {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { icon: Code2, label: "Snippets", value: snippets.length, color: "text-primary" },
@@ -160,7 +164,6 @@ const ProfilePage = () => {
 
         <FriendManager userId={user.id} />
 
-        {/* Edit profile */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Edit Profile</h2>
           <p className="text-xs text-muted-foreground">Note: your avatar comes from your sign-in account (Google/GitHub/Microsoft).</p>
@@ -173,8 +176,8 @@ const ProfilePage = () => {
             <Textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell us about yourself..." maxLength={200} rows={3} />
             <p className="text-xs text-muted-foreground text-right">{bio.length}/200</p>
           </div>
-          <Button onClick={handleSave} disabled={saving} className="w-full">
-            <Save className="h-4 w-4 mr-2" />{saving ? "Saving..." : "Save Changes"}
+          <Button onClick={() => upsertMutation.mutate({ data: { username, bio } })} disabled={upsertMutation.isPending} className="w-full">
+            <Save className="h-4 w-4 mr-2" />{upsertMutation.isPending ? "Saving..." : "Save Changes"}
           </Button>
         </div>
       </main>

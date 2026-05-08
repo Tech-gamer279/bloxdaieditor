@@ -5,18 +5,34 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  CreateForumPostBody,
+  CreateForumReplyBody,
+  CreateSnippetBody,
+  ErrorResponse,
+  ForumPost,
+  ForumReply,
+  HealthStatus,
+  LikeToggleResult,
+  Profile,
+  ProfileWithSnippets,
+  SnippetWithLiked,
+  UpsertProfileBody,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
-import type { ErrorType } from "../custom-fetch";
+import type { ErrorType, BodyType } from "../custom-fetch";
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -99,3 +115,1185 @@ export function useHealthCheck<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Returns all snippets ordered by creation date descending. Includes `liked` flag when authenticated.
+ * @summary List all snippets
+ */
+export const getListSnippetsUrl = () => {
+  return `/api/snippets`;
+};
+
+export const listSnippets = async (
+  options?: RequestInit,
+): Promise<SnippetWithLiked[]> => {
+  return customFetch<SnippetWithLiked[]>(getListSnippetsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListSnippetsQueryKey = () => {
+  return [`/api/snippets`] as const;
+};
+
+export const getListSnippetsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listSnippets>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listSnippets>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListSnippetsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listSnippets>>> = ({
+    signal,
+  }) => listSnippets({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listSnippets>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListSnippetsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listSnippets>>
+>;
+export type ListSnippetsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all snippets
+ */
+
+export function useListSnippets<
+  TData = Awaited<ReturnType<typeof listSnippets>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listSnippets>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSnippetsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Creates a new code snippet. Requires authentication.
+ * @summary Create a snippet
+ */
+export const getCreateSnippetUrl = () => {
+  return `/api/snippets`;
+};
+
+export const createSnippet = async (
+  createSnippetBody: CreateSnippetBody,
+  options?: RequestInit,
+): Promise<SnippetWithLiked> => {
+  return customFetch<SnippetWithLiked>(getCreateSnippetUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createSnippetBody),
+  });
+};
+
+export const getCreateSnippetMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createSnippet>>,
+    TError,
+    { data: BodyType<CreateSnippetBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createSnippet>>,
+  TError,
+  { data: BodyType<CreateSnippetBody> },
+  TContext
+> => {
+  const mutationKey = ["createSnippet"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createSnippet>>,
+    { data: BodyType<CreateSnippetBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createSnippet(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateSnippetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createSnippet>>
+>;
+export type CreateSnippetMutationBody = BodyType<CreateSnippetBody>;
+export type CreateSnippetMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Create a snippet
+ */
+export const useCreateSnippet = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createSnippet>>,
+    TError,
+    { data: BodyType<CreateSnippetBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createSnippet>>,
+  TError,
+  { data: BodyType<CreateSnippetBody> },
+  TContext
+> => {
+  return useMutation(getCreateSnippetMutationOptions(options));
+};
+
+/**
+ * Toggles the like state on a snippet for the authenticated user.
+ * @summary Like or unlike a snippet
+ */
+export const getToggleSnippetLikeUrl = (id: string) => {
+  return `/api/snippets/${id}/like`;
+};
+
+export const toggleSnippetLike = async (
+  id: string,
+  options?: RequestInit,
+): Promise<LikeToggleResult> => {
+  return customFetch<LikeToggleResult>(getToggleSnippetLikeUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getToggleSnippetLikeMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof toggleSnippetLike>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof toggleSnippetLike>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["toggleSnippetLike"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof toggleSnippetLike>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return toggleSnippetLike(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ToggleSnippetLikeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof toggleSnippetLike>>
+>;
+
+export type ToggleSnippetLikeMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Like or unlike a snippet
+ */
+export const useToggleSnippetLike = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof toggleSnippetLike>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof toggleSnippetLike>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getToggleSnippetLikeMutationOptions(options));
+};
+
+/**
+ * Increments the view counter for a snippet.
+ * @summary Record a snippet view
+ */
+export const getRecordSnippetViewUrl = (id: string) => {
+  return `/api/snippets/${id}/view`;
+};
+
+export const recordSnippetView = async (
+  id: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getRecordSnippetViewUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRecordSnippetViewMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordSnippetView>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof recordSnippetView>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["recordSnippetView"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof recordSnippetView>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return recordSnippetView(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RecordSnippetViewMutationResult = NonNullable<
+  Awaited<ReturnType<typeof recordSnippetView>>
+>;
+
+export type RecordSnippetViewMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Record a snippet view
+ */
+export const useRecordSnippetView = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordSnippetView>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof recordSnippetView>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getRecordSnippetViewMutationOptions(options));
+};
+
+/**
+ * Deletes a snippet owned by the authenticated user.
+ * @summary Delete a snippet
+ */
+export const getDeleteSnippetUrl = (id: string) => {
+  return `/api/snippets/${id}`;
+};
+
+export const deleteSnippet = async (
+  id: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteSnippetUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteSnippetMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteSnippet>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteSnippet>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["deleteSnippet"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteSnippet>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteSnippet(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteSnippetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteSnippet>>
+>;
+
+export type DeleteSnippetMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Delete a snippet
+ */
+export const useDeleteSnippet = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteSnippet>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteSnippet>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getDeleteSnippetMutationOptions(options));
+};
+
+/**
+ * Returns all forum posts ordered by creation date descending.
+ * @summary List forum posts
+ */
+export const getListForumPostsUrl = () => {
+  return `/api/forum/posts`;
+};
+
+export const listForumPosts = async (
+  options?: RequestInit,
+): Promise<ForumPost[]> => {
+  return customFetch<ForumPost[]>(getListForumPostsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListForumPostsQueryKey = () => {
+  return [`/api/forum/posts`] as const;
+};
+
+export const getListForumPostsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listForumPosts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listForumPosts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListForumPostsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listForumPosts>>> = ({
+    signal,
+  }) => listForumPosts({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listForumPosts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListForumPostsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listForumPosts>>
+>;
+export type ListForumPostsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List forum posts
+ */
+
+export function useListForumPosts<
+  TData = Awaited<ReturnType<typeof listForumPosts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listForumPosts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListForumPostsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Creates a new forum post. Requires authentication.
+ * @summary Create a forum post
+ */
+export const getCreateForumPostUrl = () => {
+  return `/api/forum/posts`;
+};
+
+export const createForumPost = async (
+  createForumPostBody: CreateForumPostBody,
+  options?: RequestInit,
+): Promise<ForumPost> => {
+  return customFetch<ForumPost>(getCreateForumPostUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createForumPostBody),
+  });
+};
+
+export const getCreateForumPostMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createForumPost>>,
+    TError,
+    { data: BodyType<CreateForumPostBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createForumPost>>,
+  TError,
+  { data: BodyType<CreateForumPostBody> },
+  TContext
+> => {
+  const mutationKey = ["createForumPost"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createForumPost>>,
+    { data: BodyType<CreateForumPostBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createForumPost(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateForumPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createForumPost>>
+>;
+export type CreateForumPostMutationBody = BodyType<CreateForumPostBody>;
+export type CreateForumPostMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Create a forum post
+ */
+export const useCreateForumPost = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createForumPost>>,
+    TError,
+    { data: BodyType<CreateForumPostBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createForumPost>>,
+  TError,
+  { data: BodyType<CreateForumPostBody> },
+  TContext
+> => {
+  return useMutation(getCreateForumPostMutationOptions(options));
+};
+
+/**
+ * Deletes a forum post owned by the authenticated user.
+ * @summary Delete a forum post
+ */
+export const getDeleteForumPostUrl = (id: string) => {
+  return `/api/forum/posts/${id}`;
+};
+
+export const deleteForumPost = async (
+  id: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteForumPostUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteForumPostMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteForumPost>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteForumPost>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["deleteForumPost"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteForumPost>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteForumPost(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteForumPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteForumPost>>
+>;
+
+export type DeleteForumPostMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Delete a forum post
+ */
+export const useDeleteForumPost = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteForumPost>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteForumPost>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getDeleteForumPostMutationOptions(options));
+};
+
+/**
+ * @summary List replies for a forum post
+ */
+export const getListForumRepliesUrl = (id: string) => {
+  return `/api/forum/posts/${id}/replies`;
+};
+
+export const listForumReplies = async (
+  id: string,
+  options?: RequestInit,
+): Promise<ForumReply[]> => {
+  return customFetch<ForumReply[]>(getListForumRepliesUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListForumRepliesQueryKey = (id: string) => {
+  return [`/api/forum/posts/${id}/replies`] as const;
+};
+
+export const getListForumRepliesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listForumReplies>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listForumReplies>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListForumRepliesQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listForumReplies>>
+  > = ({ signal }) => listForumReplies(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listForumReplies>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListForumRepliesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listForumReplies>>
+>;
+export type ListForumRepliesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List replies for a forum post
+ */
+
+export function useListForumReplies<
+  TData = Awaited<ReturnType<typeof listForumReplies>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listForumReplies>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListForumRepliesQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Creates a reply to the specified forum post. Requires authentication.
+ * @summary Create a reply to a forum post
+ */
+export const getCreateForumReplyUrl = (id: string) => {
+  return `/api/forum/posts/${id}/replies`;
+};
+
+export const createForumReply = async (
+  id: string,
+  createForumReplyBody: CreateForumReplyBody,
+  options?: RequestInit,
+): Promise<ForumReply> => {
+  return customFetch<ForumReply>(getCreateForumReplyUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createForumReplyBody),
+  });
+};
+
+export const getCreateForumReplyMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createForumReply>>,
+    TError,
+    { id: string; data: BodyType<CreateForumReplyBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createForumReply>>,
+  TError,
+  { id: string; data: BodyType<CreateForumReplyBody> },
+  TContext
+> => {
+  const mutationKey = ["createForumReply"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createForumReply>>,
+    { id: string; data: BodyType<CreateForumReplyBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return createForumReply(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateForumReplyMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createForumReply>>
+>;
+export type CreateForumReplyMutationBody = BodyType<CreateForumReplyBody>;
+export type CreateForumReplyMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Create a reply to a forum post
+ */
+export const useCreateForumReply = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createForumReply>>,
+    TError,
+    { id: string; data: BodyType<CreateForumReplyBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createForumReply>>,
+  TError,
+  { id: string; data: BodyType<CreateForumReplyBody> },
+  TContext
+> => {
+  return useMutation(getCreateForumReplyMutationOptions(options));
+};
+
+/**
+ * Returns the top 10 profiles sorted by rank points descending.
+ * @summary List top profiles by rank points
+ */
+export const getListTopProfilesUrl = () => {
+  return `/api/profiles/top`;
+};
+
+export const listTopProfiles = async (
+  options?: RequestInit,
+): Promise<Profile[]> => {
+  return customFetch<Profile[]>(getListTopProfilesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListTopProfilesQueryKey = () => {
+  return [`/api/profiles/top`] as const;
+};
+
+export const getListTopProfilesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTopProfiles>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listTopProfiles>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListTopProfilesQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listTopProfiles>>> = ({
+    signal,
+  }) => listTopProfiles({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTopProfiles>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListTopProfilesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTopProfiles>>
+>;
+export type ListTopProfilesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List top profiles by rank points
+ */
+
+export function useListTopProfiles<
+  TData = Awaited<ReturnType<typeof listTopProfiles>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listTopProfiles>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListTopProfilesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get a profile by username
+ */
+export const getGetProfileByUsernameUrl = (username: string) => {
+  return `/api/profiles/by-username/${username}`;
+};
+
+export const getProfileByUsername = async (
+  username: string,
+  options?: RequestInit,
+): Promise<ProfileWithSnippets> => {
+  return customFetch<ProfileWithSnippets>(
+    getGetProfileByUsernameUrl(username),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetProfileByUsernameQueryKey = (username: string) => {
+  return [`/api/profiles/by-username/${username}`] as const;
+};
+
+export const getGetProfileByUsernameQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProfileByUsername>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  username: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProfileByUsername>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetProfileByUsernameQueryKey(username);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProfileByUsername>>
+  > = ({ signal }) =>
+    getProfileByUsername(username, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!username,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProfileByUsername>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetProfileByUsernameQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProfileByUsername>>
+>;
+export type GetProfileByUsernameQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get a profile by username
+ */
+
+export function useGetProfileByUsername<
+  TData = Awaited<ReturnType<typeof getProfileByUsername>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  username: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProfileByUsername>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetProfileByUsernameQueryOptions(username, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get a profile by user ID
+ */
+export const getGetProfileUrl = (userId: string) => {
+  return `/api/profiles/${userId}`;
+};
+
+export const getProfile = async (
+  userId: string,
+  options?: RequestInit,
+): Promise<ProfileWithSnippets> => {
+  return customFetch<ProfileWithSnippets>(getGetProfileUrl(userId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetProfileQueryKey = (userId: string) => {
+  return [`/api/profiles/${userId}`] as const;
+};
+
+export const getGetProfileQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProfile>>,
+  TError = ErrorType<unknown>,
+>(
+  userId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProfile>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetProfileQueryKey(userId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getProfile>>> = ({
+    signal,
+  }) => getProfile(userId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!userId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProfile>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetProfileQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProfile>>
+>;
+export type GetProfileQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get a profile by user ID
+ */
+
+export function useGetProfile<
+  TData = Awaited<ReturnType<typeof getProfile>>,
+  TError = ErrorType<unknown>,
+>(
+  userId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProfile>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetProfileQueryOptions(userId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create or update the authenticated user's profile
+ */
+export const getUpsertProfileUrl = () => {
+  return `/api/profiles`;
+};
+
+export const upsertProfile = async (
+  upsertProfileBody: UpsertProfileBody,
+  options?: RequestInit,
+): Promise<Profile> => {
+  return customFetch<Profile>(getUpsertProfileUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(upsertProfileBody),
+  });
+};
+
+export const getUpsertProfileMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertProfile>>,
+    TError,
+    { data: BodyType<UpsertProfileBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof upsertProfile>>,
+  TError,
+  { data: BodyType<UpsertProfileBody> },
+  TContext
+> => {
+  const mutationKey = ["upsertProfile"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof upsertProfile>>,
+    { data: BodyType<UpsertProfileBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return upsertProfile(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpsertProfileMutationResult = NonNullable<
+  Awaited<ReturnType<typeof upsertProfile>>
+>;
+export type UpsertProfileMutationBody = BodyType<UpsertProfileBody>;
+export type UpsertProfileMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Create or update the authenticated user's profile
+ */
+export const useUpsertProfile = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertProfile>>,
+    TError,
+    { data: BodyType<UpsertProfileBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof upsertProfile>>,
+  TError,
+  { data: BodyType<UpsertProfileBody> },
+  TContext
+> => {
+  return useMutation(getUpsertProfileMutationOptions(options));
+};

@@ -10,6 +10,12 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: snippets
+    description: Code snippet operations
+  - name: forum
+    description: Forum post and reply operations
+  - name: profiles
+    description: User profile operations
 paths:
   /healthz:
     get:
@@ -24,6 +30,354 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── Snippets ──────────────────────────────────────────────────────────────
+  /snippets:
+    get:
+      operationId: listSnippets
+      tags: [snippets]
+      summary: List all snippets
+      description: Returns all snippets ordered by creation date descending. Includes `liked` flag when authenticated.
+      responses:
+        "200":
+          description: List of snippets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SnippetWithLiked"
+    post:
+      operationId: createSnippet
+      tags: [snippets]
+      summary: Create a snippet
+      description: Creates a new code snippet. Requires authentication.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSnippetBody"
+      responses:
+        "201":
+          description: Created snippet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SnippetWithLiked"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /snippets/{id}/like:
+    post:
+      operationId: toggleSnippetLike
+      tags: [snippets]
+      summary: Like or unlike a snippet
+      description: Toggles the like state on a snippet for the authenticated user.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: New like state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LikeToggleResult"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /snippets/{id}/view:
+    post:
+      operationId: recordSnippetView
+      tags: [snippets]
+      summary: Record a snippet view
+      description: Increments the view counter for a snippet.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: View recorded
+
+  /snippets/{id}:
+    delete:
+      operationId: deleteSnippet
+      tags: [snippets]
+      summary: Delete a snippet
+      description: Deletes a snippet owned by the authenticated user.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Deleted
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Forum ─────────────────────────────────────────────────────────────────
+  /forum/posts:
+    get:
+      operationId: listForumPosts
+      tags: [forum]
+      summary: List forum posts
+      description: Returns all forum posts ordered by creation date descending.
+      responses:
+        "200":
+          description: List of forum posts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ForumPost"
+    post:
+      operationId: createForumPost
+      tags: [forum]
+      summary: Create a forum post
+      description: Creates a new forum post. Requires authentication.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateForumPostBody"
+      responses:
+        "201":
+          description: Created forum post
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumPost"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /forum/posts/{id}:
+    delete:
+      operationId: deleteForumPost
+      tags: [forum]
+      summary: Delete a forum post
+      description: Deletes a forum post owned by the authenticated user.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Deleted
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /forum/posts/{id}/replies:
+    get:
+      operationId: listForumReplies
+      tags: [forum]
+      summary: List replies for a forum post
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: List of replies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ForumReply"
+    post:
+      operationId: createForumReply
+      tags: [forum]
+      summary: Create a reply to a forum post
+      description: Creates a reply to the specified forum post. Requires authentication.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateForumReplyBody"
+      responses:
+        "201":
+          description: Created reply
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumReply"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Profiles ──────────────────────────────────────────────────────────────
+  /profiles/top:
+    get:
+      operationId: listTopProfiles
+      tags: [profiles]
+      summary: List top profiles by rank points
+      description: Returns the top 10 profiles sorted by rank points descending.
+      responses:
+        "200":
+          description: List of top profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Profile"
+
+  /profiles/by-username/{username}:
+    get:
+      operationId: getProfileByUsername
+      tags: [profiles]
+      summary: Get a profile by username
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Profile and their snippets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileWithSnippets"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /profiles/{userId}:
+    get:
+      operationId: getProfile
+      tags: [profiles]
+      summary: Get a profile by user ID
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Profile and their snippets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileWithSnippets"
+
+  /profiles:
+    put:
+      operationId: upsertProfile
+      tags: [profiles]
+      summary: Create or update the authenticated user's profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertProfileBody"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+        "201":
+          description: Created profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +388,223 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    # ── Snippets ─────────────────────────────────────────────────────────────
+    Snippet:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        authorName:
+          type: string
+        title:
+          type: string
+        code:
+          type: string
+        likes:
+          type: integer
+        views:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - authorName
+        - title
+        - code
+        - likes
+        - views
+        - createdAt
+
+    SnippetWithLiked:
+      allOf:
+        - $ref: "#/components/schemas/Snippet"
+        - type: object
+          properties:
+            liked:
+              type: boolean
+          required:
+            - liked
+
+    LikeToggleResult:
+      type: object
+      properties:
+        liked:
+          type: boolean
+      required:
+        - liked
+
+    CreateSnippetBody:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        code:
+          type: string
+      required:
+        - title
+        - code
+
+    # ── Forum ─────────────────────────────────────────────────────────────────
+    ForumPost:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        authorName:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+        replyCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - authorName
+        - title
+        - content
+        - replyCount
+        - createdAt
+
+    ForumReply:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        postId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        authorName:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - postId
+        - userId
+        - authorName
+        - content
+        - createdAt
+
+    CreateForumPostBody:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        content:
+          type: string
+          maxLength: 5000
+      required:
+        - title
+        - content
+
+    CreateForumReplyBody:
+      type: object
+      properties:
+        content:
+          type: string
+          maxLength: 2000
+      required:
+        - content
+
+    # ── Profiles ──────────────────────────────────────────────────────────────
+    Profile:
+      type: object
+      properties:
+        userId:
+          type: string
+        username:
+          type: string
+          nullable: true
+        bio:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+        rankPoints:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - userId
+        - rankPoints
+        - updatedAt
+
+    ProfileSnippet:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        likes:
+          type: integer
+        views:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - likes
+        - views
+        - createdAt
+
+    ProfileWithSnippets:
+      type: object
+      properties:
+        profile:
+          oneOf:
+            - $ref: "#/components/schemas/Profile"
+            - type: "null"
+        snippets:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfileSnippet"
+      required:
+        - profile
+        - snippets
+
+    UpsertProfileBody:
+      type: object
+      properties:
+        username:
+          type: string
+          maxLength: 30
+        bio:
+          type: string
+          maxLength: 200
+        avatar_url:
+          type: string

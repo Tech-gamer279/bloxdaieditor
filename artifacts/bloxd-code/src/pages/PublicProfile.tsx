@@ -5,9 +5,8 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Code2, Heart, Eye, Trophy, User, Award } from "lucide-react";
 import Header from "@/components/Header";
+import { useGetProfileByUsername, getGetProfileByUsernameQueryKey } from "@workspace/api-client-react";
 
-type Profile = { userId: string; username: string | null; bio: string | null; avatarUrl: string | null; rankPoints: number };
-type Snip = { id: string; title: string; likes: number; views: number; createdAt: string };
 type BadgeEntry = { id: string; badge: { id: string; name: string; description: string; emoji: string; color: string } };
 
 function rankTitle(p: number) {
@@ -30,24 +29,21 @@ const RANK_COLORS: Record<string, string> = {
 const PublicProfile = () => {
   const { username } = useParams<{ username: string }>();
   const [, navigate] = useLocation();
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [snippets, setSnippets] = useState<Snip[]>([]);
   const [badges, setBadges] = useState<BadgeEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  const { data, isLoading } = useGetProfileByUsername(username ?? "", {
+    query: { enabled: !!username, queryKey: getGetProfileByUsernameQueryKey(username ?? "") },
+  });
+
+  const profile = data?.profile ?? null;
+  const snippets = data?.snippets ?? [];
 
   useEffect(() => {
-    if (!username) return;
-    apiFetch(`/profiles/by-username/${encodeURIComponent(username)}`)
-      .then((data) => {
-        const d = data as { profile: Profile; snippets: Snip[] };
-        setProfile(d.profile);
-        setSnippets(d.snippets);
-        return apiFetch(`/badges/user/${d.profile.userId}`);
-      })
+    if (!profile) return;
+    apiFetch(`/badges/user/${profile.userId}`)
       .then((b) => setBadges(b as BadgeEntry[]))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [username]);
+      .catch(() => {});
+  }, [profile]);
 
   const rank = profile ? rankTitle(profile.rankPoints) : "";
 
@@ -56,7 +52,7 @@ const PublicProfile = () => {
       <Header onNewSnippet={() => {}} />
       <main className="container max-w-3xl px-4 py-8">
         <Button variant="ghost" size="sm" onClick={() => navigate("/")}><ArrowLeft className="h-4 w-4 mr-1" /> Back</Button>
-        {loading ? (
+        {isLoading ? (
           <p className="text-center py-12 text-muted-foreground animate-pulse">Loading...</p>
         ) : !profile ? (
           <p className="text-center py-12 text-muted-foreground">User not found</p>
@@ -78,7 +74,6 @@ const PublicProfile = () => {
               </div>
             </div>
 
-            {/* Badges */}
             {badges.length > 0 && (
               <div className="rounded-lg border border-border bg-card p-4 space-y-3">
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
@@ -100,7 +95,6 @@ const PublicProfile = () => {
               </div>
             )}
 
-            {/* Snippets */}
             <div>
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
                 <Code2 className="h-4 w-4" /> Snippets ({snippets.length})

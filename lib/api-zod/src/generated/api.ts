@@ -14,3 +14,227 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * Returns all snippets ordered by creation date descending. Includes `liked` flag when authenticated.
+ * @summary List all snippets
+ */
+export const ListSnippetsResponseItem = zod
+  .object({
+    id: zod.string().uuid(),
+    userId: zod.string(),
+    authorName: zod.string(),
+    title: zod.string(),
+    code: zod.string(),
+    likes: zod.number(),
+    views: zod.number(),
+    createdAt: zod.coerce.date(),
+  })
+  .and(
+    zod.object({
+      liked: zod.boolean(),
+    }),
+  );
+export const ListSnippetsResponse = zod.array(ListSnippetsResponseItem);
+
+/**
+ * Creates a new code snippet. Requires authentication.
+ * @summary Create a snippet
+ */
+export const createSnippetBodyTitleMax = 200;
+
+export const CreateSnippetBody = zod.object({
+  title: zod.string().max(createSnippetBodyTitleMax),
+  code: zod.string(),
+});
+
+/**
+ * Toggles the like state on a snippet for the authenticated user.
+ * @summary Like or unlike a snippet
+ */
+export const ToggleSnippetLikeParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const ToggleSnippetLikeResponse = zod.object({
+  liked: zod.boolean(),
+});
+
+/**
+ * Increments the view counter for a snippet.
+ * @summary Record a snippet view
+ */
+export const RecordSnippetViewParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+/**
+ * Deletes a snippet owned by the authenticated user.
+ * @summary Delete a snippet
+ */
+export const DeleteSnippetParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+/**
+ * Returns all forum posts ordered by creation date descending.
+ * @summary List forum posts
+ */
+export const ListForumPostsResponseItem = zod.object({
+  id: zod.string().uuid(),
+  userId: zod.string(),
+  authorName: zod.string(),
+  title: zod.string(),
+  content: zod.string(),
+  replyCount: zod.number(),
+  createdAt: zod.coerce.date(),
+});
+export const ListForumPostsResponse = zod.array(ListForumPostsResponseItem);
+
+/**
+ * Creates a new forum post. Requires authentication.
+ * @summary Create a forum post
+ */
+export const createForumPostBodyTitleMax = 200;
+
+export const createForumPostBodyContentMax = 5000;
+
+export const CreateForumPostBody = zod.object({
+  title: zod.string().max(createForumPostBodyTitleMax),
+  content: zod.string().max(createForumPostBodyContentMax),
+});
+
+/**
+ * Deletes a forum post owned by the authenticated user.
+ * @summary Delete a forum post
+ */
+export const DeleteForumPostParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+/**
+ * @summary List replies for a forum post
+ */
+export const ListForumRepliesParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const ListForumRepliesResponseItem = zod.object({
+  id: zod.string().uuid(),
+  postId: zod.string().uuid(),
+  userId: zod.string(),
+  authorName: zod.string(),
+  content: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+export const ListForumRepliesResponse = zod.array(ListForumRepliesResponseItem);
+
+/**
+ * Creates a reply to the specified forum post. Requires authentication.
+ * @summary Create a reply to a forum post
+ */
+export const CreateForumReplyParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const createForumReplyBodyContentMax = 2000;
+
+export const CreateForumReplyBody = zod.object({
+  content: zod.string().max(createForumReplyBodyContentMax),
+});
+
+/**
+ * Returns the top 10 profiles sorted by rank points descending.
+ * @summary List top profiles by rank points
+ */
+export const ListTopProfilesResponseItem = zod.object({
+  userId: zod.string(),
+  username: zod.string().nullish(),
+  bio: zod.string().nullish(),
+  avatarUrl: zod.string().nullish(),
+  rankPoints: zod.number(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListTopProfilesResponse = zod.array(ListTopProfilesResponseItem);
+
+/**
+ * @summary Get a profile by username
+ */
+export const GetProfileByUsernameParams = zod.object({
+  username: zod.coerce.string(),
+});
+
+export const GetProfileByUsernameResponse = zod.object({
+  profile: zod.union([
+    zod.object({
+      userId: zod.string(),
+      username: zod.string().nullish(),
+      bio: zod.string().nullish(),
+      avatarUrl: zod.string().nullish(),
+      rankPoints: zod.number(),
+      updatedAt: zod.coerce.date(),
+    }),
+    zod.null(),
+  ]),
+  snippets: zod.array(
+    zod.object({
+      id: zod.string().uuid(),
+      title: zod.string(),
+      likes: zod.number(),
+      views: zod.number(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Get a profile by user ID
+ */
+export const GetProfileParams = zod.object({
+  userId: zod.coerce.string(),
+});
+
+export const GetProfileResponse = zod.object({
+  profile: zod.union([
+    zod.object({
+      userId: zod.string(),
+      username: zod.string().nullish(),
+      bio: zod.string().nullish(),
+      avatarUrl: zod.string().nullish(),
+      rankPoints: zod.number(),
+      updatedAt: zod.coerce.date(),
+    }),
+    zod.null(),
+  ]),
+  snippets: zod.array(
+    zod.object({
+      id: zod.string().uuid(),
+      title: zod.string(),
+      likes: zod.number(),
+      views: zod.number(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Create or update the authenticated user's profile
+ */
+export const upsertProfileBodyUsernameMax = 30;
+
+export const upsertProfileBodyBioMax = 200;
+
+export const UpsertProfileBody = zod.object({
+  username: zod.string().max(upsertProfileBodyUsernameMax).optional(),
+  bio: zod.string().max(upsertProfileBodyBioMax).optional(),
+  avatar_url: zod.string().optional(),
+});
+
+export const UpsertProfileResponse = zod.object({
+  userId: zod.string(),
+  username: zod.string().nullish(),
+  bio: zod.string().nullish(),
+  avatarUrl: zod.string().nullish(),
+  rankPoints: zod.number(),
+  updatedAt: zod.coerce.date(),
+});

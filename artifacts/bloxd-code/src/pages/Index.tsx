@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import Header from "@/components/Header";
 import SnippetCard from "@/components/SnippetCard";
 import type { Snippet } from "@/components/SnippetCard";
@@ -15,18 +15,18 @@ import {
   UserPlus, BookOpen, MapPin, Puzzle,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useApi, apiFetch } from "@/lib/api";
+import {
+  useListSnippets,
+  useCreateSnippet,
+  getListSnippetsQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import MediaUpload from "@/components/MediaUpload";
 import FriendManager from "@/components/FriendManager";
 import UpdateLog from "@/components/UpdateLog";
 import { toast } from "@/hooks/use-toast";
 
 type Tab = "snippets" | "ai" | "ranks" | "forum" | "community" | "media" | "friends" | "update-log" | "schematics" | "mods";
-
-type RawSnippet = {
-  id: string; title: string; code: string; authorName: string; userId: string;
-  likes: number; views: number; createdAt: string; liked: boolean;
-};
 
 const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }>; color: string }[] = [
   { id: "snippets",    label: "Code Snippets",  icon: Code2,         color: "primary" },
@@ -43,59 +43,54 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
 
 const Index = () => {
   const { user } = useAuth();
-  const api = useApi();
-  const [snippets, setSnippets] = useState<Snippet[]>([]);
+  const qc = useQueryClient();
   const [selectedSnippet, setSelectedSnippet] = useState<Snippet | null>(null);
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("snippets");
 
-  const fetchSnippets = useCallback(async () => {
-    try {
-      const data = await apiFetch("/snippets") as RawSnippet[];
-      setSnippets(data.map((s) => ({
-        id: s.id,
-        title: s.title,
-        code: s.code,
-        author: s.authorName,
-        likes: s.likes,
-        views: s.views,
-        createdAt: s.createdAt,
-        userId: s.userId,
-        liked: s.liked,
-      })));
-    } catch {}
-  }, []);
+  const { data: rawSnippets = [] } = useListSnippets();
 
-  useEffect(() => { fetchSnippets(); }, [fetchSnippets]);
+  const snippets: Snippet[] = rawSnippets.map((s) => ({
+    id: s.id,
+    title: s.title,
+    code: s.code,
+    author: s.authorName,
+    likes: s.likes,
+    views: s.views,
+    createdAt: s.createdAt,
+    userId: s.userId,
+    liked: s.liked,
+  }));
+
+  const createSnippetMutation = useCreateSnippet({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getListSnippetsQueryKey() });
+        toast({ title: "Snippet shared!", description: "Your code has been shared with the community" });
+      },
+      onError: (err) => {
+        toast({ title: "Failed", description: err.message, variant: "destructive" });
+      },
+    },
+  });
 
   const handleNewSnippet = async (snippet: Snippet) => {
     if (!user) {
       toast({ title: "Sign in required", description: "You need to sign in to share snippets", variant: "destructive" });
       return;
     }
-    try {
-      const created = await api("/snippets", {
-        method: "POST",
-        body: JSON.stringify({ title: snippet.title, code: snippet.code }),
-      }) as RawSnippet;
-      setSnippets((prev) => [{
-        id: created.id, title: created.title, code: created.code,
-        author: created.authorName, likes: 0, views: 0,
-        createdAt: created.createdAt, userId: created.userId, liked: false,
-      }, ...prev]);
-      toast({ title: "Snippet shared!", description: "Your code has been shared with the community" });
-    } catch (e: unknown) {
-      toast({ title: "Failed", description: (e as Error).message, variant: "destructive" });
-    }
+    createSnippetMutation.mutate({ data: { title: snippet.title, code: snippet.code } });
   };
 
   const handleDelete = (id: string) => {
-    setSnippets((prev) => prev.filter((s) => s.id !== id));
+    qc.invalidateQueries({ queryKey: getListSnippetsQueryKey() });
     if (selectedSnippet?.id === id) setSelectedSnippet(null);
   };
 
   const handleLikeChange = (id: string, liked: boolean, newCount: number) => {
-    setSnippets((prev) => prev.map((s) => s.id === id ? { ...s, liked, likes: newCount } : s));
+    qc.setQueryData(getListSnippetsQueryKey(), (prev: typeof rawSnippets | undefined) =>
+      prev ? prev.map((s) => s.id === id ? { ...s, liked, likes: newCount } : s) : prev
+    );
   };
 
   return (
@@ -103,7 +98,6 @@ const Index = () => {
       <Header onNewSnippet={() => setShowNewDialog(true)} />
 
       <main className="container px-4 py-6">
-        {/* Tab bar */}
         <div className="flex flex-wrap gap-2 mb-6">
           {TABS.map(({ id, label, icon: Icon, color }) => {
             const active = activeTab === id;
@@ -129,7 +123,6 @@ const Index = () => {
           })}
         </div>
 
-        {/* Tab content */}
         {activeTab === "community" ? (
           <Community />
         ) : activeTab === "schematics" ? (

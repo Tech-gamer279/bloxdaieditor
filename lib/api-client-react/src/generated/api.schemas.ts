@@ -8,3 +8,93 @@
 export interface HealthStatus {
   status: string;
 }
+
+export interface ErrorResponse {
+  error: string;
+}
+
+export interface Snippet {
+  id: string;
+  userId: string;
+  authorName: string;
+  title: string;
+  code: string;
+  likes: number;
+  views: number;
+  createdAt: string;
+}
+
+export type SnippetWithLiked = Snippet & {
+  liked: boolean;
+};
+
+export interface LikeToggleResult {
+  liked: boolean;
+}
+
+export interface CreateSnippetBody {
+  /** @maxLength 200 */
+  title: string;
+  code: string;
+}
+
+export interface ForumPost {
+  id: string;
+  userId: string;
+  authorName: string;
+  title: string;
+  content: string;
+  replyCount: number;
+  createdAt: string;
+}
+
+export interface ForumReply {
+  id: string;
+  postId: string;
+  userId: string;
+  authorName: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface CreateForumPostBody {
+  /** @maxLength 200 */
+  title: string;
+  /** @maxLength 5000 */
+  content: string;
+}
+
+export interface CreateForumReplyBody {
+  /** @maxLength 2000 */
+  content: string;
+}
+
+export interface Profile {
+  userId: string;
+  username?: string | null;
+  bio?: string | null;
+  avatarUrl?: string | null;
+  rankPoints: number;
+  updatedAt: string;
+}
+
+export interface ProfileSnippet {
+  id: string;
+  title: string;
+  likes: number;
+  views: number;
+  createdAt: string;
+}
+
+export interface ProfileWithSnippets {
+  profile: Profile | null;
+  snippets: ProfileSnippet[];
+}
+
+export interface UpsertProfileBody {
+  /** @maxLength 30 */
+  username?: string;
+  /** @maxLength 200 */
+  bio?: string;
+  avatar_url?: string;
+}

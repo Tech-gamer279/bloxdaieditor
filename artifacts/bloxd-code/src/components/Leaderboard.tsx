@@ -1,10 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
-import { apiFetch } from "@/lib/api";
 import { Trophy, Medal, Star, Crown, Heart, Eye } from "lucide-react";
-
-type RankedUser = { userId: string; username: string | null; rankPoints: number };
-type TopSnippet = { id: string; title: string; authorName: string; likes: number; views: number };
+import { useListTopProfiles, useListSnippets } from "@workspace/api-client-react";
 
 const RANK_CONFIG: Record<string, { color: string; icon: typeof Star }> = {
   Owner: { color: "text-red-500", icon: Crown },
@@ -29,30 +26,24 @@ function getRankTitle(points: number): string {
 }
 
 const Leaderboard = () => {
-  const [users, setUsers] = useState<RankedUser[]>([]);
-  const [topSnippets, setTopSnippets] = useState<TopSnippet[]>([]);
-  const [tab, setTab] = useState<"users" | "snippets">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "snippets">("users");
+  const { data: users = [] } = useListTopProfiles();
+  const { data: allSnippets = [] } = useListSnippets();
 
-  useEffect(() => {
-    apiFetch("/profiles/top").then((data) => setUsers(data as RankedUser[])).catch(() => {});
-    apiFetch("/snippets").then((data) => {
-      const snippets = (data as TopSnippet[]).sort((a, b) => b.likes - a.likes).slice(0, 10);
-      setTopSnippets(snippets);
-    }).catch(() => {});
-  }, []);
+  const topSnippets = [...allSnippets].sort((a, b) => b.likes - a.likes).slice(0, 10);
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="flex border-b border-border">
-        <button onClick={() => setTab("users")} className={`flex-1 px-4 py-2.5 text-xs font-semibold transition-colors ${tab === "users" ? "bg-primary/10 text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"}`}>
+        <button onClick={() => setActiveTab("users")} className={`flex-1 px-4 py-2.5 text-xs font-semibold transition-colors ${activeTab === "users" ? "bg-primary/10 text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"}`}>
           <Trophy className="h-3.5 w-3.5 inline mr-1.5" />Top Users
         </button>
-        <button onClick={() => setTab("snippets")} className={`flex-1 px-4 py-2.5 text-xs font-semibold transition-colors ${tab === "snippets" ? "bg-primary/10 text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"}`}>
+        <button onClick={() => setActiveTab("snippets")} className={`flex-1 px-4 py-2.5 text-xs font-semibold transition-colors ${activeTab === "snippets" ? "bg-primary/10 text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"}`}>
           <Heart className="h-3.5 w-3.5 inline mr-1.5" />Top Snippets
         </button>
       </div>
       <div className="p-3 space-y-1.5 max-h-[300px] overflow-y-auto">
-        {tab === "users" ? (
+        {activeTab === "users" ? (
           users.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-4">No ranked users yet — share snippets to earn points!</p>
           ) : (

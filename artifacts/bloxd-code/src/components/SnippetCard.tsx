@@ -3,7 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Copy, Heart, Eye, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { useApi } from "@/lib/api";
+import {
+  useToggleSnippetLike,
+  useDeleteSnippet,
+  getListSnippetsQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface Snippet {
   id: string;
@@ -26,32 +31,47 @@ interface SnippetCardProps {
 
 const SnippetCard = ({ snippet, onClick, onDelete, onLikeChange }: SnippetCardProps) => {
   const { user } = useAuth();
-  const api = useApi();
+  const qc = useQueryClient();
   const [liked, setLiked] = useState(snippet.liked ?? false);
   const [likeCount, setLikeCount] = useState(snippet.likes);
-  const [loading, setLoading] = useState(false);
 
   const isOwner = user && snippet.userId === user.id;
 
-  const handleLike = async (e: React.MouseEvent) => {
+  const toggleLikeMutation = useToggleSnippetLike({
+    mutation: {
+      onSuccess: (result) => {
+        const newLiked = result.liked;
+        const newCount = newLiked ? likeCount + 1 : likeCount - 1;
+        setLiked(newLiked);
+        setLikeCount(newCount);
+        onLikeChange?.(snippet.id, newLiked, newCount);
+      },
+      onError: () => {
+        toast({ title: "Failed to like", variant: "destructive" });
+      },
+    },
+  });
+
+  const deleteSnippetMutation = useDeleteSnippet({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getListSnippetsQueryKey() });
+        onDelete?.(snippet.id);
+        toast({ title: "Deleted" });
+      },
+      onError: () => {
+        toast({ title: "Failed to delete", variant: "destructive" });
+      },
+    },
+  });
+
+  const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!user) {
       toast({ title: "Sign in required", description: "You need to sign in to like snippets", variant: "destructive" });
       return;
     }
-    if (loading) return;
-    setLoading(true);
-    try {
-      const result = await api(`/snippets/${snippet.id}/like`, { method: "POST" }) as { liked: boolean };
-      const newLiked = result.liked;
-      const newCount = newLiked ? likeCount + 1 : likeCount - 1;
-      setLiked(newLiked);
-      setLikeCount(newCount);
-      onLikeChange?.(snippet.id, newLiked, newCount);
-    } catch {
-      toast({ title: "Failed to like", variant: "destructive" });
-    }
-    setLoading(false);
+    toggleLikeMutation.mutate({ id: snippet.id });
   };
 
   const handleCopy = async (e: React.MouseEvent) => {
@@ -60,17 +80,11 @@ const SnippetCard = ({ snippet, onClick, onDelete, onLikeChange }: SnippetCardPr
     toast({ title: "Copied!", description: "Code copied to clipboard" });
   };
 
-  const handleDelete = async (e: React.MouseEvent) => {
+  const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isOwner) return;
     if (!window.confirm("Delete this snippet?")) return;
-    try {
-      await api(`/snippets/${snippet.id}`, { method: "DELETE" });
-      onDelete?.(snippet.id);
-      toast({ title: "Deleted" });
-    } catch {
-      toast({ title: "Failed to delete", variant: "destructive" });
-    }
+    deleteSnippetMutation.mutate({ id: snippet.id });
   };
 
   return (
@@ -101,7 +115,7 @@ const SnippetCard = ({ snippet, onClick, onDelete, onLikeChange }: SnippetCardPr
         <div className="flex items-center gap-3">
           <button
             onClick={handleLike}
-            disabled={loading}
+            disabled={toggleLikeMutation.isPending}
             className={`flex items-center gap-1 transition-colors ${liked ? "text-red-500" : "hover:text-red-400"}`}
           >
             <Heart className={`h-3 w-3 ${liked ? "fill-current" : ""}`} /> {likeCount}
