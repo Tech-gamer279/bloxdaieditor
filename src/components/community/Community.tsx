@@ -49,13 +49,17 @@ const Community = () => {
     });
   }, [user]);
 
-  // Load servers
-  const loadServers = async () => {
-    const { data } = await supabase.from("servers").select("*").order("created_at");
+  // Load servers the user is a member of
+  const loadServers = async (currentUser: typeof user) => {
+    if (!currentUser) return;
+    const { data: memberOf } = await supabase.from("server_members").select("server_id").eq("user_id", currentUser.id);
+    if (!memberOf || !memberOf.length) { setServers([]); setActiveServer(null); return; }
+    const serverIds = memberOf.map((m) => m.server_id);
+    const { data } = await supabase.from("servers").select("*").in("id", serverIds).order("created_at");
     setServers((data || []) as Server[]);
     if (data && data.length && !activeServer) setActiveServer(data[0] as Server);
   };
-  useEffect(() => { if (user) loadServers(); }, [user]);
+  useEffect(() => { if (user) loadServers(user); }, [user]);
 
   const loadServerData = async (server: Server) => {
     const [chRes, memRes] = await Promise.all([
@@ -102,21 +106,21 @@ const Community = () => {
   }, [activeServer, user]);
 
   const createServer = async () => {
-    if (!newName.trim()) return;
+    if (!newName.trim() || !user) return;
     const { data, error } = await supabase.rpc("create_server", { _name: newName.trim() });
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
     setNewName(""); setCreateOpen(false);
-    await loadServers();
+    await loadServers(user);
     const { data: s } = await supabase.from("servers").select("*").eq("id", data as string).single();
     if (s) setActiveServer(s as Server);
   };
 
   const joinServer = async () => {
-    if (!inviteCode.trim()) return;
+    if (!inviteCode.trim() || !user) return;
     const { data, error } = await supabase.rpc("join_server_by_invite", { _code: inviteCode.trim() });
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
     setInviteCode(""); setJoinOpen(false);
-    await loadServers();
+    await loadServers(user);
     const { data: s } = await supabase.from("servers").select("*").eq("id", data as string).single();
     if (s) setActiveServer(s as Server);
   };
@@ -135,7 +139,7 @@ const Community = () => {
     if (!confirm(`Leave ${activeServer.name}?`)) return;
     await supabase.from("server_members").delete().eq("server_id", activeServer.id).eq("user_id", user.id);
     setActiveServer(null);
-    await loadServers();
+    await loadServers(user);
   };
 
   const handleBan = async () => {
