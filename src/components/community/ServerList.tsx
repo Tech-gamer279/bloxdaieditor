@@ -1,4 +1,4 @@
-import { Plus, Hash, Compass } from "lucide-react";
+import { Plus, Compass, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Server } from "./types";
 import { cn } from "@/lib/utils";
@@ -9,9 +9,10 @@ interface Props {
   onSelect: (id: string) => void;
   onCreate: () => void;
   onJoin: () => void;
+  onBrowse?: () => void;
 }
 
-const ServerList = ({ servers, activeId, onSelect, onCreate, onJoin }: Props) => {
+const ServerList = ({ servers, activeId, onSelect, onCreate, onJoin, onBrowse }: Props) => {
   return (
     <div className="flex flex-col items-center gap-2 py-3 px-2 bg-background/60 border-r border-border w-[64px] shrink-0">
       {servers.map((s) => (
@@ -47,11 +48,22 @@ const ServerList = ({ servers, activeId, onSelect, onCreate, onJoin }: Props) =>
         size="icon"
         variant="ghost"
         onClick={onJoin}
-        title="Join server"
+        title="Join with code"
         className="w-12 h-12 rounded-2xl hover:rounded-xl hover:bg-accent/20 text-accent"
       >
         <Compass className="h-5 w-5" />
       </Button>
+      {onBrowse && (
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={onBrowse}
+          title="Browse public servers"
+          className="w-12 h-12 rounded-2xl hover:rounded-xl hover:bg-emerald-500/20 text-emerald-400"
+        >
+          <Globe className="h-5 w-5" />
+        </Button>
+      )}
     </div>
   );
 };

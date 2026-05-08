@@ -4,6 +4,16 @@ export interface Server {
   icon_url: string | null;
   owner_id: string;
   invite_code: string;
+  is_public?: boolean;
+}
+
+export interface PublicServer {
+  id: string;
+  name: string;
+  icon_url: string | null;
+  invite_code: string;
+  member_count: number;
+  created_at: string;
 }
 
 export interface Channel {
