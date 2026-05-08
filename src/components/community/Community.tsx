@@ -28,14 +28,18 @@ const Community = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [browseOpen, setBrowseOpen] = useState(false);
   const [chanOpen, setChanOpen] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newPublic, setNewPublic] = useState(false);
   const [inviteCode, setInviteCode] = useState("");
   const [chanName, setChanName] = useState("");
   const [chanType, setChanType] = useState<"text" | "voice">("text");
   const [banTarget, setBanTarget] = useState<Member | null>(null);
   const [banDuration, setBanDuration] = useState<number>(0);
   const [banReason, setBanReason] = useState("");
+  const [publicServers, setPublicServers] = useState<PublicServer[]>([]);
+  const [browseLoading, setBrowseLoading] = useState(false);
 
   const [dm, setDm] = useState<{ id: string; otherId: string; otherName: string } | null>(null);
 
