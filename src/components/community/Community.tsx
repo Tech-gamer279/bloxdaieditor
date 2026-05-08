@@ -110,9 +110,42 @@ const Community = () => {
     if (!newName.trim()) return;
     const { data, error } = await supabase.rpc("create_server", { _name: newName.trim() });
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
-    setNewName(""); setCreateOpen(false);
+    const newId = data as string;
+    if (newPublic) {
+      await supabase.from("servers").update({ is_public: true }).eq("id", newId);
+    }
+    setNewName(""); setNewPublic(false); setCreateOpen(false);
     await loadServers();
-    const { data: s } = await supabase.from("servers").select("*").eq("id", data as string).single();
+    const { data: s } = await supabase.from("servers").select("*").eq("id", newId).single();
+    if (s) setActiveServer(s as Server);
+  };
+
+  const togglePublic = async () => {
+    if (!activeServer || activeServer.owner_id !== user?.id) return;
+    const next = !activeServer.is_public;
+    const { error } = await supabase.from("servers").update({ is_public: next }).eq("id", activeServer.id);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    toast({ title: next ? "Server is now public" : "Server set to private" });
+    setActiveServer({ ...activeServer, is_public: next });
+    await loadServers();
+  };
+
+  const openBrowse = async () => {
+    setBrowseOpen(true);
+    setBrowseLoading(true);
+    const { data, error } = await supabase.rpc("list_public_servers");
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    setPublicServers((data || []) as PublicServer[]);
+    setBrowseLoading(false);
+  };
+
+  const joinPublic = async (id: string) => {
+    const { error } = await supabase.rpc("join_public_server", { _server: id });
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Joined!" });
+    setBrowseOpen(false);
+    await loadServers();
+    const { data: s } = await supabase.from("servers").select("*").eq("id", id).single();
     if (s) setActiveServer(s as Server);
   };
 
