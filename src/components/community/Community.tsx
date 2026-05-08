@@ -11,8 +11,9 @@ import MemberList from "./MemberList";
 import ChatRoom from "./ChatRoom";
 import VoiceRoom from "./VoiceRoom";
 import DMPanel from "./DMPanel";
-import type { Server, Channel, Member } from "./types";
-import { Users } from "lucide-react";
+import type { Server, Channel, Member, PublicServer } from "./types";
+import { Users, Globe, Hash } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 const Community = () => {
   const { user } = useAuth();
@@ -27,14 +28,18 @@ const Community = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [browseOpen, setBrowseOpen] = useState(false);
   const [chanOpen, setChanOpen] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newPublic, setNewPublic] = useState(false);
   const [inviteCode, setInviteCode] = useState("");
   const [chanName, setChanName] = useState("");
   const [chanType, setChanType] = useState<"text" | "voice">("text");
   const [banTarget, setBanTarget] = useState<Member | null>(null);
   const [banDuration, setBanDuration] = useState<number>(0);
   const [banReason, setBanReason] = useState("");
+  const [publicServers, setPublicServers] = useState<PublicServer[]>([]);
+  const [browseLoading, setBrowseLoading] = useState(false);
 
   const [dm, setDm] = useState<{ id: string; otherId: string; otherName: string } | null>(null);
 
@@ -190,6 +195,7 @@ const Community = () => {
         onSelect={(id) => setActiveServer(servers.find((s) => s.id === id) || null)}
         onCreate={() => setCreateOpen(true)}
         onJoin={() => setJoinOpen(true)}
+        onBrowse={openBrowse}
       />
       <ChannelList
         server={activeServer}
@@ -222,10 +228,56 @@ const Community = () => {
         <DialogContent>
           <DialogHeader><DialogTitle>Create a server</DialogTitle></DialogHeader>
           <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="My awesome server" />
+          <div className="flex items-center justify-between rounded-lg border border-border p-3">
+            <div>
+              <p className="text-sm font-medium text-foreground">Public server</p>
+              <p className="text-xs text-muted-foreground">Anyone can find and join from the browse list</p>
+            </div>
+            <Switch checked={newPublic} onCheckedChange={setNewPublic} />
+          </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button variant="neon" onClick={createServer}>Create</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={browseOpen} onOpenChange={setBrowseOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Globe className="h-4 w-4 text-emerald-400" /> Browse public servers</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[50vh] overflow-y-auto -mx-2 px-2">
+            {browseLoading ? (
+              <p className="text-sm text-muted-foreground text-center py-6">Loading…</p>
+            ) : publicServers.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">No public servers yet. Be the first!</p>
+            ) : (
+              <div className="space-y-2">
+                {publicServers.map((s) => {
+                  const joined = servers.some((m) => m.id === s.id);
+                  return (
+                    <div key={s.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center text-primary font-bold shrink-0 overflow-hidden">
+                          {s.icon_url ? <img src={s.icon_url} className="w-full h-full object-cover" /> : s.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium text-foreground truncate">{s.name}</p>
+                          <p className="text-xs text-muted-foreground">{s.member_count} member{s.member_count === 1 ? "" : "s"}</p>
+                        </div>
+                      </div>
+                      {joined ? (
+                        <Button size="sm" variant="ghost" disabled>Joined</Button>
+                      ) : (
+                        <Button size="sm" variant="neon" onClick={() => joinPublic(s.id)}>Join</Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -242,10 +294,19 @@ const Community = () => {
 
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Server invite</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Server invite & visibility</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">Share this invite code with friends to let them join your server.</p>
             <div className="rounded-lg border border-border bg-background p-3 text-sm font-semibold">{activeServer?.invite_code || "-"}</div>
+            {activeServer && activeServer.owner_id === user?.id && (
+              <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Public server</p>
+                  <p className="text-xs text-muted-foreground">Show in browse list so anyone can join</p>
+                </div>
+                <Switch checked={!!activeServer.is_public} onCheckedChange={togglePublic} />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setInviteOpen(false)}>Close</Button>

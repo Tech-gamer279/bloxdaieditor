@@ -1,37 +1,37 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, BookOpen, ClipboardList, Cloud, Compass, Flag, GitBranch, Gift, Key, Layers, Lock, Mail, MessageSquare, PieChart, RefreshCcw, Scroll, Settings2, ShieldCheck, Sparkles, Star, User, UserPlus } from "lucide-react";
-import FriendManager from "@/components/FriendManager";
-import MediaUpload from "@/components/MediaUpload";
-import UpdateLog from "@/components/UpdateLog";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Flag, Shield, Trash2, UserCheck, Users as UsersIcon, BarChart3, Ban } from "lucide-react";
+
+type UserRow = { user_id: string; username: string | null; rank_points: number; created_at: string };
+type Report = { id: string; reason: string; status: string; target_type: string; target_id: string; created_at: string; reporter_id: string };
+type Snip = { id: string; title: string; author_name: string; likes: number; views: number };
 
 const AdminPage = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [admins, setAdmins] = useState<Set<string>>(new Set());
+  const [reports, setReports] = useState<Report[]>([]);
+  const [snippets, setSnippets] = useState<Snip[]>([]);
+  const [search, setSearch] = useState("");
+  const [stats, setStats] = useState({ users: 0, snippets: 0, posts: 0, openReports: 0 });
+
   useEffect(() => {
     if (loading) return;
-    if (!user) {
-      navigate("/auth");
-      return;
-    }
+    if (!user) { navigate("/auth"); return; }
     (async () => {
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .eq("role", "admin")
-        .maybeSingle();
-      if (error || !data) {
+      const { data } = await supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle();
+      if (!data) {
         toast({ title: "Access denied", description: "Admin role required", variant: "destructive" });
-        setIsAdmin(false);
         navigate("/");
         return;
       }
@@ -39,420 +39,162 @@ const AdminPage = () => {
     })();
   }, [user, loading, navigate]);
 
-  if (!user || isAdmin !== true) {
-    return null;
-  }
+  const loadAll = async () => {
+    const [u, r, s, p, ar] = await Promise.all([
+      supabase.from("profiles").select("user_id,username,rank_points,created_at").order("created_at", { ascending: false }).limit(200),
+      supabase.from("reports").select("*").order("created_at", { ascending: false }).limit(100),
+      supabase.from("snippets").select("id,title,author_name,likes,views").order("created_at", { ascending: false }).limit(100),
+      supabase.from("forum_posts").select("id", { count: "exact", head: true }),
+      supabase.from("user_roles").select("user_id").eq("role", "admin"),
+    ]);
+    setUsers((u.data || []) as UserRow[]);
+    setReports((r.data || []) as Report[]);
+    setSnippets((s.data || []) as Snip[]);
+    setAdmins(new Set((ar.data || []).map((x: any) => x.user_id)));
+    setStats({
+      users: u.data?.length || 0,
+      snippets: s.data?.length || 0,
+      posts: p.count || 0,
+      openReports: (r.data || []).filter((x: any) => x.status === "open").length,
+    });
+  };
 
+  useEffect(() => { if (isAdmin) loadAll(); }, [isAdmin]);
 
-  const updateLog = [
-    { date: "2026-05-06", change: "Added admin dashboard with 20 editor features and tabs." },
-    { date: "2026-05-04", change: "Enabled profile media uploads and friend manager integration." },
-    { date: "2026-05-01", change: "Improved community moderation and live status widgets." },
-    { date: "2026-04-28", change: "Added developer notes, audit trails, and quick action cards." },
-  ];
+  const grantAdmin = async (uid: string) => {
+    const { error } = await supabase.from("user_roles").insert({ user_id: uid, role: "admin" });
+    if (error) return toast({ title: "Failed", description: error.message, variant: "destructive" });
+    toast({ title: "Granted admin role" });
+    loadAll();
+  };
+
+  const revokeAdmin = async (uid: string) => {
+    if (uid === user?.id) return toast({ title: "Can't revoke yourself", variant: "destructive" });
+    const { error } = await supabase.from("user_roles").delete().eq("user_id", uid).eq("role", "admin");
+    if (error) return toast({ title: "Failed", description: error.message, variant: "destructive" });
+    toast({ title: "Admin revoked" });
+    loadAll();
+  };
+
+  const resolveReport = async (id: string) => {
+    const { error } = await supabase.from("reports").update({ status: "resolved" }).eq("id", id);
+    if (error) return toast({ title: "Failed", description: error.message, variant: "destructive" });
+    loadAll();
+  };
+
+  const deleteReport = async (id: string) => {
+    await supabase.from("reports").delete().eq("id", id);
+    loadAll();
+  };
+
+  const deleteSnippet = async (id: string) => {
+    if (!confirm("Delete this snippet?")) return;
+    const { error } = await supabase.from("snippets").delete().eq("id", id);
+    if (error) return toast({ title: "Failed", description: error.message, variant: "destructive" });
+    toast({ title: "Snippet deleted" });
+    loadAll();
+  };
+
+  if (!user || isAdmin !== true) return null;
+
+  const filteredUsers = users.filter((u) => !search || (u.username || "").toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="container flex items-center justify-between h-14 px-4">
-          <div>
-            <h1 className="text-lg font-bold text-foreground">Admin Dashboard</h1>
-            <p className="text-sm text-muted-foreground">Manage app features, view logs, moderate content, and launch new tools.</p>
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/")}><ArrowLeft className="h-4 w-4 mr-1" /> Home</Button>
+            <h1 className="text-lg font-bold flex items-center gap-2"><Shield className="h-5 w-5 text-primary" /> Admin Dashboard</h1>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-          </div>
+          <Button variant="ghost" size="sm" onClick={loadAll}>Refresh</Button>
         </div>
       </header>
 
-      <main className="container px-4 py-6">
-        <div className="rounded-lg border border-border bg-card p-5 mb-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Admin tools</p>
-              <h2 className="text-2xl font-bold text-foreground">All features in one place</h2>
+      <main className="container px-4 py-6 space-y-6">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { label: "Users", value: stats.users, icon: UsersIcon, color: "text-cyan-400" },
+            { label: "Snippets", value: stats.snippets, icon: BarChart3, color: "text-emerald-400" },
+            { label: "Forum Posts", value: stats.posts, icon: BarChart3, color: "text-purple-400" },
+            { label: "Open Reports", value: stats.openReports, icon: Flag, color: "text-red-400" },
+          ].map((s) => (
+            <div key={s.label} className="rounded-lg border border-border bg-card p-4 flex items-center gap-3">
+              <s.icon className={`h-8 w-8 ${s.color}`} />
+              <div>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">{s.label}</p>
+                <p className="text-2xl font-bold text-foreground">{s.value}</p>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" size="sm" onClick={() => navigate("/")}>Home</Button>
-              <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>Refresh</Button>
-            </div>
-          </div>
+          ))}
         </div>
 
-        <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            <TabsTrigger value="overview">
-              <Layers className="mr-2 h-4 w-4" />Overview
-            </TabsTrigger>
-            <TabsTrigger value="update-log">
-              <BookOpen className="mr-2 h-4 w-4" />Update Log
-            </TabsTrigger>
-            <TabsTrigger value="media-library">
-              <Cloud className="mr-2 h-4 w-4" />Media Library
-            </TabsTrigger>
-            <TabsTrigger value="friend-requests">
-              <UserPlus className="mr-2 h-4 w-4" />Friend Requests
-            </TabsTrigger>
-            <TabsTrigger value="user-management">
-              <User className="mr-2 h-4 w-4" />User Management
-            </TabsTrigger>
-            <TabsTrigger value="moderation">
-              <Flag className="mr-2 h-4 w-4" />Moderation
-            </TabsTrigger>
-            <TabsTrigger value="reports">
-              <ClipboardList className="mr-2 h-4 w-4" />Reports
-            </TabsTrigger>
-            <TabsTrigger value="analytics">
-              <PieChart className="mr-2 h-4 w-4" />Analytics
-            </TabsTrigger>
-            <TabsTrigger value="release-notes">
-              <GitBranch className="mr-2 h-4 w-4" />Release Notes
-            </TabsTrigger>
-            <TabsTrigger value="support-queue">
-              <Mail className="mr-2 h-4 w-4" />Support Queue
-            </TabsTrigger>
-            <TabsTrigger value="announcements">
-              <MessageSquare className="mr-2 h-4 w-4" />Announcements
-            </TabsTrigger>
-            <TabsTrigger value="feature-flags">
-              <Settings2 className="mr-2 h-4 w-4" />Feature Flags
-            </TabsTrigger>
-            <TabsTrigger value="api-tokens">
-              <Key className="mr-2 h-4 w-4" />API Tokens
-            </TabsTrigger>
-            <TabsTrigger value="backup">
-              <RefreshCcw className="mr-2 h-4 w-4" />Backup
-            </TabsTrigger>
-            <TabsTrigger value="audit-log">
-              <Scroll className="mr-2 h-4 w-4" />Audit Log
-            </TabsTrigger>
-            <TabsTrigger value="theme-switcher">
-              <Sparkles className="mr-2 h-4 w-4" />Theme Switcher
-            </TabsTrigger>
-            <TabsTrigger value="quick-actions">
-              <Compass className="mr-2 h-4 w-4" />Quick Actions
-            </TabsTrigger>
-            <TabsTrigger value="dev-notes">
-              <BookOpen className="mr-2 h-4 w-4" />Dev Notes
-            </TabsTrigger>
-            <TabsTrigger value="badge-rewards">
-              <Gift className="mr-2 h-4 w-4" />Badges
-            </TabsTrigger>
-            <TabsTrigger value="security">
-              <ShieldCheck className="mr-2 h-4 w-4" />Security
-            </TabsTrigger>
-            <TabsTrigger value="community-pulse">
-              <Star className="mr-2 h-4 w-4" />Pulse
-            </TabsTrigger>
+        <Tabs defaultValue="users">
+          <TabsList>
+            <TabsTrigger value="users"><UsersIcon className="h-4 w-4 mr-2" />Users</TabsTrigger>
+            <TabsTrigger value="reports"><Flag className="h-4 w-4 mr-2" />Reports</TabsTrigger>
+            <TabsTrigger value="snippets"><BarChart3 className="h-4 w-4 mr-2" />Snippets</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview">
-            <div className="rounded-lg border border-border bg-card p-6 space-y-4">
-              <h3 className="text-xl font-semibold text-foreground">Welcome, admin.</h3>
-              <p className="text-sm text-muted-foreground">
-                This panel includes 20 independent feature tabs: update log, media library, friend manager, moderation tools, analytics, and more.
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {[
-                  { label: "20 feature tabs", value: "Active" },
-                  { label: "Media uploads", value: "Ready" },
-                  { label: "Friend manager", value: "Enabled" },
-                  { label: "Audit logging", value: "Live" },
-                ].map((card) => (
-                  <div key={card.label} className="rounded-lg border border-border p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{card.label}</p>
-                    <p className="mt-2 text-lg font-semibold text-foreground">{card.value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="update-log">
-            <UpdateLog />
-          </TabsContent>
-
-          <TabsContent value="media-library">
-            <MediaUpload userId={user.id} title="Admin Media Library" description="Upload and manage admin media files used in the app." uploadFolder="admin-media" />
-          </TabsContent>
-
-          <TabsContent value="friend-requests">
-            <FriendManager userId={user.id} />
-          </TabsContent>
-
-          <TabsContent value="user-management">
-            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">User Management</h3>
-              <p className="text-sm text-muted-foreground">Review accounts, assign roles, or flag suspicious sign-ins.</p>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {[
-                  { title: "Total users", value: "1,280" },
-                  { title: "Pending approvals", value: "12" },
-                  { title: "Admins", value: "5" },
-                ].map((item) => (
-                  <div key={item.title} className="rounded-lg border border-border p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{item.title}</p>
-                    <p className="mt-2 text-2xl font-semibold text-foreground">{item.value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="moderation">
-            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Moderation Queue</h3>
-              <p className="text-sm text-muted-foreground">Review flagged content, user reports, and chat moderation actions.</p>
-              <div className="grid gap-3">
-                {Array.from({ length: 3 }).map((_, idx) => (
-                  <div key={idx} className="rounded-lg border border-border p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-foreground">Report #{idx + 1}</p>
-                        <p className="text-sm text-muted-foreground">User flagged chat message or image.</p>
-                      </div>
-                      <Button size="sm">Review</Button>
+          <TabsContent value="users" className="space-y-3">
+            <Input placeholder="Search by username..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <div className="rounded-lg border border-border bg-card divide-y divide-border">
+              {filteredUsers.map((u) => {
+                const isA = admins.has(u.user_id);
+                return (
+                  <div key={u.user_id} className="flex items-center justify-between p-3 gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground truncate">{u.username || "anonymous"}</p>
+                      <p className="text-xs text-muted-foreground">{u.rank_points} pts • joined {new Date(u.created_at).toLocaleDateString()}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {isA && <Badge variant="default">Admin</Badge>}
+                      {isA ? (
+                        <Button size="sm" variant="ghost" onClick={() => revokeAdmin(u.user_id)}>Revoke</Button>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={() => grantAdmin(u.user_id)}><UserCheck className="h-3 w-3 mr-1" />Make admin</Button>
+                      )}
                     </div>
                   </div>
-                ))}
-              </div>
+                );
+              })}
+              {filteredUsers.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No users</p>}
             </div>
           </TabsContent>
 
-          <TabsContent value="reports">
-            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Reports</h3>
-              <p className="text-sm text-muted-foreground">Track critical issues, bug reports, and community feedback in one place.</p>
-              <div className="grid gap-3">
-                {[
-                  { label: "Bugs pending", value: "8" },
-                  { label: "New feature requests", value: "16" },
-                  { label: "Policy violations", value: "3" },
-                ].map((item) => (
-                  <div key={item.label} className="rounded-lg border border-border p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{item.label}</p>
-                    <p className="mt-2 text-xl font-semibold text-foreground">{item.value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="analytics">
-            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Analytics</h3>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {[
-                  { title: "Active sessions", value: "689" },
-                  { title: "Uploads today", value: "32" },
-                  { title: "New friends", value: "14" },
-                ].map((item) => (
-                  <div key={item.title} className="rounded-lg border border-border p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{item.title}</p>
-                    <p className="mt-2 text-2xl font-semibold text-foreground">{item.value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="release-notes">
-            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Release Notes</h3>
-              {updateLog.map((item) => (
-                <div key={item.date} className="rounded-lg border border-border p-4">
-                  <p className="text-sm font-semibold text-foreground">{item.date}</p>
-                  <p className="mt-2 text-sm text-muted-foreground">{item.change}</p>
-                </div>
-              ))}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="support-queue">
-            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Support Queue</h3>
-              <p className="text-sm text-muted-foreground">Respond to open tickets and urgent requests.</p>
-              <div className="grid gap-3">
-                {Array.from({ length: 3 }).map((_, idx) => (
-                  <div key={idx} className="rounded-lg border border-border p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-foreground">Ticket #{idx + 1}</p>
-                        <p className="text-sm text-muted-foreground">Open issue from the community.</p>
-                      </div>
-                      <Button size="sm">Reply</Button>
+          <TabsContent value="reports" className="space-y-3">
+            <div className="rounded-lg border border-border bg-card divide-y divide-border">
+              {reports.map((r) => (
+                <div key={r.id} className="p-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge variant={r.status === "open" ? "destructive" : "secondary"}>{r.status}</Badge>
+                      <span className="text-xs text-muted-foreground">{r.target_type} • {new Date(r.created_at).toLocaleString()}</span>
                     </div>
+                    <p className="text-sm text-foreground">{r.reason}</p>
                   </div>
-                ))}
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="announcements">
-            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Announcements</h3>
-              <Textarea defaultValue="New feature rollout scheduled for Friday. Check the update log for details." rows={6} />
-              <Button size="sm">Publish Announcement</Button>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="feature-flags">
-            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Feature Flags</h3>
-              {[
-                { label: "New forum layout", key: "forumLayout" },
-                { label: "AI coder beta", key: "aiBeta" },
-                { label: "Media preview", key: "mediaPreview" },
-              ].map((flag) => (
-                <div key={flag.key} className="flex items-center justify-between rounded-lg border border-border p-4">
-                  <div>
-                    <p className="font-medium text-foreground">{flag.label}</p>
-                    <p className="text-sm text-muted-foreground">Enable or disable this feature for the next release.</p>
+                  <div className="flex gap-2 shrink-0">
+                    {r.status === "open" && <Button size="sm" variant="outline" onClick={() => resolveReport(r.id)}>Resolve</Button>}
+                    <Button size="sm" variant="ghost" onClick={() => deleteReport(r.id)}><Trash2 className="h-3 w-3" /></Button>
                   </div>
-                  <Button size="sm">Toggle</Button>
                 </div>
               ))}
+              {reports.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No reports</p>}
             </div>
           </TabsContent>
 
-          <TabsContent value="api-tokens">
-            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">API Tokens</h3>
-              <div className="rounded-lg border border-border p-4">
-                <p className="text-sm text-muted-foreground">Create tokens for third-party integrations and automation.</p>
-                <Button size="sm">Create new token</Button>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="backup">
-            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Backup Scheduler</h3>
-              <p className="text-sm text-muted-foreground">Automatic daily backups keep your editor data safe.</p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Next backup</p>
-                  <p className="mt-2 text-lg font-semibold text-foreground">Tomorrow at 3:00 AM</p>
-                </div>
-                <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Retention</p>
-                  <p className="mt-2 text-lg font-semibold text-foreground">30 days</p>
-                </div>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="audit-log">
-            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Audit Log</h3>
-              {[
-                "User signed in",
-                "Media file uploaded",
-                "Friend request accepted",
-                "Admin settings updated",
-              ].map((entry, index) => (
-                <div key={index} className="rounded-lg border border-border p-4 text-sm text-muted-foreground">
-                  <p>{entry}</p>
+          <TabsContent value="snippets" className="space-y-3">
+            <div className="rounded-lg border border-border bg-card divide-y divide-border">
+              {snippets.map((s) => (
+                <div key={s.id} className="p-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground truncate">{s.title}</p>
+                    <p className="text-xs text-muted-foreground">by {s.author_name} • {s.likes} likes • {s.views} views</p>
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => deleteSnippet(s.id)}><Trash2 className="h-3 w-3 text-red-400" /></Button>
                 </div>
               ))}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="theme-switcher">
-            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Theme Switcher</h3>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {[
-                  { label: "Light mode", active: true },
-                  { label: "Dark mode", active: false },
-                  { label: "System", active: false },
-                ].map((theme) => (
-                  <div key={theme.label} className="rounded-lg border border-border p-4">
-                    <p className="font-medium text-foreground">{theme.label}</p>
-                    <p className="text-sm text-muted-foreground">{theme.active ? "Active" : "Inactive"}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="quick-actions">
-            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Quick Actions</h3>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {[
-                  { label: "Clear cache" },
-                  { label: "Reset stats" },
-                  { label: "Publish update" },
-                  { label: "Sync database" },
-                ].map((action) => (
-                  <Button key={action.label} variant="secondary" size="sm">
-                    {action.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="dev-notes">
-            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Developer Notes</h3>
-              <Textarea defaultValue="Use the admin dashboard to test new features, collect feedback, and monitor user activity." rows={6} />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="badge-rewards">
-            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Badge Rewards</h3>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {[
-                  { name: "Contributor", status: "Active" },
-                  { name: "Early adopter", status: "Active" },
-                ].map((badge) => (
-                  <div key={badge.name} className="rounded-lg border border-border p-4">
-                    <p className="font-medium text-foreground">{badge.name}</p>
-                    <p className="text-sm text-muted-foreground">{badge.status}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="security">
-            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Security</h3>
-              <div className="space-y-3">
-                {[
-                  "Two-factor auth enabled",
-                  "Password policy enforced",
-                  "Uploads scanned for malware",
-                ].map((item, idx) => (
-                  <div key={idx} className="rounded-lg border border-border p-4">
-                    <p className="text-sm text-muted-foreground">{item}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="community-pulse">
-            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Community Pulse</h3>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {[
-                  { label: "Active channels", value: "12" },
-                  { label: "Online members", value: "74" },
-                  { label: "Live chats", value: "8" },
-                ].map((item) => (
-                  <div key={item.label} className="rounded-lg border border-border p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{item.label}</p>
-                    <p className="mt-2 text-2xl font-semibold text-foreground">{item.value}</p>
-                  </div>
-                ))}
-              </div>
+              {snippets.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No snippets</p>}
             </div>
           </TabsContent>
         </Tabs>

@@ -593,6 +593,7 @@ export type Database = {
           icon_url: string | null
           id: string
           invite_code: string
+          is_public: boolean
           name: string
           owner_id: string
           updated_at: string
@@ -602,6 +603,7 @@ export type Database = {
           icon_url?: string | null
           id?: string
           invite_code?: string
+          is_public?: boolean
           name: string
           owner_id: string
           updated_at?: string
@@ -611,6 +613,7 @@ export type Database = {
           icon_url?: string | null
           id?: string
           invite_code?: string
+          is_public?: boolean
           name?: string
           owner_id?: string
           updated_at?: string
@@ -816,7 +819,19 @@ export type Database = {
         Args: { _server: string; _user: string }
         Returns: boolean
       }
+      join_public_server: { Args: { _server: string }; Returns: string }
       join_server_by_invite: { Args: { _code: string }; Returns: string }
+      list_public_servers: {
+        Args: never
+        Returns: {
+          created_at: string
+          icon_url: string
+          id: string
+          invite_code: string
+          member_count: number
+          name: string
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"

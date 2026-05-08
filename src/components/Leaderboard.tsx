@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Trophy, Medal, Star, Crown, Heart, Eye } from "lucide-react";
 
@@ -109,9 +110,9 @@ const Leaderboard = () => {
                   </span>
                   <Icon className={`h-3.5 w-3.5 ${cfg.color}`} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
+                    <Link to={`/u/${u.username || ""}`} className="text-sm font-medium text-foreground truncate hover:text-primary block">
                       {u.username || "Anonymous"}
-                    </p>
+                    </Link>
                     <p className={`text-xs ${cfg.color}`}>{rank}</p>
                   </div>
                   <span className="text-xs text-muted-foreground">{u.rank_points} pts</span>
