@@ -1,18 +1,13 @@
 import { Router, type IRouter } from "express";
-import { eq, and, desc, lt, gt } from "drizzle-orm";
+import { eq, and, desc, lt } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
-  serversTable,
-  channelsTable,
-  serverMembersTable,
-  messagesTable,
-  messageReactionsTable,
-  dmConversationsTable,
-  dmMessagesTable,
-  voiceParticipantsTable,
-  reportsTable,
+  serversTable, channelsTable, serverMembersTable, messagesTable,
+  messageReactionsTable, dmConversationsTable, dmMessagesTable,
+  voiceParticipantsTable, reportsTable,
 } from "@workspace/db";
 import { randomBytes } from "crypto";
+import { requireAuth, optionalAuth, type AuthedRequest } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
@@ -20,22 +15,25 @@ function makeInviteCode(): string {
   return randomBytes(4).toString("hex");
 }
 
-router.post("/community/servers", async (req, res): Promise<void> => {
-  const { name, icon_url, owner_id, owner_username } = req.body;
-  if (!name || !owner_id) { res.status(400).json({ error: "Missing name or owner_id" }); return; }
+// ── Servers ──────────────────────────────────────────────────────────────────
+
+router.post("/community/servers", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthedRequest).clerkUserId;
+  const { name, icon_url } = req.body as { name?: string; icon_url?: string };
+  if (!name?.trim()) { res.status(400).json({ error: "Missing name" }); return; }
   const inviteCode = makeInviteCode();
-  const [server] = await db.insert(serversTable).values({ name, iconUrl: icon_url || null, ownerId: owner_id, inviteCode }).returning();
+  const [server] = await db.insert(serversTable).values({ name: name.trim(), iconUrl: icon_url || null, ownerId: userId, inviteCode }).returning();
   await db.insert(channelsTable).values([
     { serverId: server.id, name: "general", type: "text", position: 0 },
     { serverId: server.id, name: "announcements", type: "text", position: 1 },
-    { serverId: server.id, name: "Voice Chat", type: "voice", position: 2 },
+    { serverId: server.id, name: "voice", type: "voice", position: 2 },
   ]);
-  await db.insert(serverMembersTable).values({ serverId: server.id, userId: owner_id, role: "owner", username: owner_username || null });
+  await db.insert(serverMembersTable).values({ serverId: server.id, userId, role: "owner" });
   res.status(201).json(server);
 });
 
-router.get("/community/servers/user/:userId", async (req, res): Promise<void> => {
-  const userId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
+router.get("/community/servers/user/:userId", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthedRequest).clerkUserId;
   const members = await db.select().from(serverMembersTable).where(eq(serverMembersTable.userId, userId));
   if (!members.length) { res.json([]); return; }
   const serverIds = members.map((m) => m.serverId);
@@ -48,67 +46,87 @@ router.get("/community/servers/public", async (_req, res): Promise<void> => {
   res.json(servers);
 });
 
-router.post("/community/servers/join", async (req, res): Promise<void> => {
-  const { invite_code, user_id, username } = req.body;
-  if (!invite_code || !user_id) { res.status(400).json({ error: "Missing invite_code or user_id" }); return; }
+router.post("/community/servers/join", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthedRequest).clerkUserId;
+  const { invite_code } = req.body as { invite_code?: string };
+  if (!invite_code) { res.status(400).json({ error: "Missing invite_code" }); return; }
   const [server] = await db.select().from(serversTable).where(eq(serversTable.inviteCode, invite_code));
   if (!server) { res.status(404).json({ error: "Server not found" }); return; }
-  const existing = await db.select().from(serverMembersTable).where(and(eq(serverMembersTable.serverId, server.id), eq(serverMembersTable.userId, user_id)));
-  if (existing.length) { res.json(server); return; }
-  await db.insert(serverMembersTable).values({ serverId: server.id, userId: user_id, role: "member", username: username || null });
+  const existing = await db.select().from(serverMembersTable).where(and(eq(serverMembersTable.serverId, server.id), eq(serverMembersTable.userId, userId)));
+  if (!existing.length) {
+    await db.insert(serverMembersTable).values({ serverId: server.id, userId, role: "member" });
+  }
   res.json(server);
 });
 
-router.post("/community/servers/:serverId/leave", async (req, res): Promise<void> => {
-  const serverId = Array.isArray(req.params.serverId) ? req.params.serverId[0] : req.params.serverId;
-  const { user_id } = req.body;
-  await db.delete(serverMembersTable).where(and(eq(serverMembersTable.serverId, serverId), eq(serverMembersTable.userId, user_id)));
+router.post("/community/servers/:serverId/leave", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthedRequest).clerkUserId;
+  const serverId = req.params.serverId as string;
+  await db.delete(serverMembersTable).where(and(eq(serverMembersTable.serverId, serverId), eq(serverMembersTable.userId, userId)));
   res.sendStatus(204);
 });
 
 router.get("/community/servers/:serverId/channels", async (req, res): Promise<void> => {
-  const serverId = Array.isArray(req.params.serverId) ? req.params.serverId[0] : req.params.serverId;
+  const serverId = req.params.serverId as string;
   const channels = await db.select().from(channelsTable).where(eq(channelsTable.serverId, serverId));
   res.json(channels);
 });
 
-router.post("/community/servers/:serverId/channels", async (req, res): Promise<void> => {
-  const serverId = Array.isArray(req.params.serverId) ? req.params.serverId[0] : req.params.serverId;
-  const { name, type } = req.body;
-  if (!name) { res.status(400).json({ error: "Missing name" }); return; }
+router.post("/community/servers/:serverId/channels", requireAuth, async (req, res): Promise<void> => {
+  const serverId = req.params.serverId as string;
+  const { name, type } = req.body as { name?: string; type?: string };
+  if (!name?.trim()) { res.status(400).json({ error: "Missing name" }); return; }
   const existing = await db.select().from(channelsTable).where(eq(channelsTable.serverId, serverId));
-  const [ch] = await db.insert(channelsTable).values({ serverId, name, type: type || "text", position: existing.length }).returning();
+  const [ch] = await db.insert(channelsTable).values({ serverId, name: name.trim(), type: (type as "text" | "voice") || "text", position: existing.length }).returning();
   res.status(201).json(ch);
 });
 
 router.get("/community/servers/:serverId/members", async (req, res): Promise<void> => {
-  const serverId = Array.isArray(req.params.serverId) ? req.params.serverId[0] : req.params.serverId;
+  const serverId = req.params.serverId as string;
   const members = await db.select().from(serverMembersTable).where(eq(serverMembersTable.serverId, serverId));
   res.json(members);
 });
 
+// ── Messages ──────────────────────────────────────────────────────────────────
+
 router.get("/community/channels/:channelId/messages", async (req, res): Promise<void> => {
-  const channelId = Array.isArray(req.params.channelId) ? req.params.channelId[0] : req.params.channelId;
+  const channelId = req.params.channelId as string;
   const { before, limit = "50" } = req.query as { before?: string; limit?: string };
-  let query = db.select().from(messagesTable).where(eq(messagesTable.channelId, channelId)).$dynamic();
+  let msgs: typeof messagesTable.$inferSelect[];
   if (before) {
-    const [msg] = await db.select().from(messagesTable).where(eq(messagesTable.id, before));
-    if (msg) query = query.where(and(eq(messagesTable.channelId, channelId), lt(messagesTable.createdAt, msg.createdAt)));
+    const [ref] = await db.select().from(messagesTable).where(eq(messagesTable.id, before));
+    if (ref) {
+      msgs = await db.select().from(messagesTable)
+        .where(and(eq(messagesTable.channelId, channelId), lt(messagesTable.createdAt, ref.createdAt)))
+        .orderBy(desc(messagesTable.createdAt)).limit(parseInt(limit, 10));
+    } else {
+      msgs = [];
+    }
+  } else {
+    msgs = await db.select().from(messagesTable)
+      .where(eq(messagesTable.channelId, channelId))
+      .orderBy(desc(messagesTable.createdAt)).limit(parseInt(limit, 10));
   }
-  const msgs = await query.orderBy(desc(messagesTable.createdAt)).limit(parseInt(limit, 10));
   res.json(msgs.reverse());
 });
 
-router.post("/community/channels/:channelId/messages", async (req, res): Promise<void> => {
-  const channelId = Array.isArray(req.params.channelId) ? req.params.channelId[0] : req.params.channelId;
-  const { user_id, author_name, content, attachment_url, attachment_name, attachment_type } = req.body;
-  if (!user_id || content == null) { res.status(400).json({ error: "Missing user_id or content" }); return; }
-  const [msg] = await db.insert(messagesTable).values({ channelId, userId: user_id, authorName: author_name || "anonymous", content, attachmentUrl: attachment_url || null, attachmentName: attachment_name || null, attachmentType: attachment_type || null }).returning();
+router.post("/community/channels/:channelId/messages", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthedRequest).clerkUserId;
+  const channelId = req.params.channelId as string;
+  const { author_name, content } = req.body as { author_name?: string; content?: string };
+  if (!content?.trim()) { res.status(400).json({ error: "Missing content" }); return; }
+  const [msg] = await db.insert(messagesTable).values({
+    channelId, userId, authorName: author_name || "anonymous", content: content.trim(),
+  }).returning();
   res.status(201).json(msg);
 });
 
-router.delete("/community/messages/:messageId", async (req, res): Promise<void> => {
-  const messageId = Array.isArray(req.params.messageId) ? req.params.messageId[0] : req.params.messageId;
+router.delete("/community/messages/:messageId", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthedRequest).clerkUserId;
+  const messageId = req.params.messageId as string;
+  const [msg] = await db.select().from(messagesTable).where(eq(messagesTable.id, messageId));
+  if (!msg) { res.status(404).json({ error: "Not found" }); return; }
+  if (msg.userId !== userId) { res.status(403).json({ error: "Forbidden" }); return; }
   await db.delete(messagesTable).where(eq(messagesTable.id, messageId));
   res.sendStatus(204);
 });
@@ -117,8 +135,7 @@ router.get("/community/messages/reactions", async (req, res): Promise<void> => {
   const { ids } = req.query as { ids?: string };
   if (!ids) { res.json([]); return; }
   const idList = ids.split(",").filter(Boolean);
-  if (!idList.length) { res.json([]); return; }
-  const all: typeof messageReactionsTable.$inferSelect[] = [];
+  const all: (typeof messageReactionsTable.$inferSelect)[] = [];
   for (const id of idList) {
     const rows = await db.select().from(messageReactionsTable).where(eq(messageReactionsTable.messageId, id));
     all.push(...rows);
@@ -126,28 +143,42 @@ router.get("/community/messages/reactions", async (req, res): Promise<void> => {
   res.json(all);
 });
 
-router.post("/community/messages/:messageId/reactions", async (req, res): Promise<void> => {
-  const messageId = Array.isArray(req.params.messageId) ? req.params.messageId[0] : req.params.messageId;
-  const { user_id, emoji } = req.body;
-  const existing = await db.select().from(messageReactionsTable).where(and(eq(messageReactionsTable.messageId, messageId), eq(messageReactionsTable.userId, user_id), eq(messageReactionsTable.emoji, emoji)));
+router.post("/community/messages/:messageId/reactions", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthedRequest).clerkUserId;
+  const messageId = req.params.messageId as string;
+  const { emoji } = req.body as { emoji?: string };
+  if (!emoji) { res.status(400).json({ error: "Missing emoji" }); return; }
+  const existing = await db.select().from(messageReactionsTable).where(
+    and(eq(messageReactionsTable.messageId, messageId), eq(messageReactionsTable.userId, userId), eq(messageReactionsTable.emoji, emoji))
+  );
   if (existing.length) {
     await db.delete(messageReactionsTable).where(eq(messageReactionsTable.id, existing[0].id));
     res.json({ removed: true });
   } else {
-    const [r] = await db.insert(messageReactionsTable).values({ messageId, userId: user_id, emoji }).returning();
+    const [r] = await db.insert(messageReactionsTable).values({ messageId, userId, emoji }).returning();
     res.status(201).json(r);
   }
 });
 
-router.post("/community/reports", async (req, res): Promise<void> => {
-  const { reporter_id, target_type, target_id, target_user_id, server_id, reason } = req.body;
-  if (!reporter_id || !target_type || !target_id || !reason) { res.status(400).json({ error: "Missing fields" }); return; }
-  const [r] = await db.insert(reportsTable).values({ reporterId: reporter_id, targetType: target_type, targetId: target_id, targetUserId: target_user_id || null, serverId: server_id || null, reason }).returning();
+// ── Reports ───────────────────────────────────────────────────────────────────
+
+router.post("/community/reports", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthedRequest).clerkUserId;
+  const { target_type, target_id, target_user_id, server_id, reason } = req.body as {
+    target_type?: string; target_id?: string; target_user_id?: string; server_id?: string; reason?: string;
+  };
+  if (!target_type || !target_id || !reason?.trim()) { res.status(400).json({ error: "Missing fields" }); return; }
+  const [r] = await db.insert(reportsTable).values({
+    reporterId: userId, targetType: target_type, targetId: target_id,
+    targetUserId: target_user_id || null, serverId: server_id || null, reason: reason.trim(),
+  }).returning();
   res.status(201).json(r);
 });
 
-router.get("/community/dm/:userId", async (req, res): Promise<void> => {
-  const userId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
+// ── DMs ────────────────────────────────────────────────────────────────────────
+
+router.get("/community/dm/:userId", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthedRequest).clerkUserId;
   const { other_id } = req.query as { other_id?: string };
   if (!other_id) { res.status(400).json({ error: "Missing other_id" }); return; }
   const [a, b] = [userId, other_id].sort();
@@ -159,38 +190,41 @@ router.get("/community/dm/:userId", async (req, res): Promise<void> => {
   res.json(convs[0]);
 });
 
-router.get("/community/dm/conversation/:conversationId/messages", async (req, res): Promise<void> => {
-  const conversationId = Array.isArray(req.params.conversationId) ? req.params.conversationId[0] : req.params.conversationId;
+router.get("/community/dm/conversation/:conversationId/messages", requireAuth, async (req, res): Promise<void> => {
+  const conversationId = req.params.conversationId as string;
   const msgs = await db.select().from(dmMessagesTable).where(eq(dmMessagesTable.conversationId, conversationId)).orderBy(dmMessagesTable.createdAt);
   res.json(msgs);
 });
 
-router.post("/community/dm/conversation/:conversationId/messages", async (req, res): Promise<void> => {
-  const conversationId = Array.isArray(req.params.conversationId) ? req.params.conversationId[0] : req.params.conversationId;
-  const { user_id, content } = req.body;
-  if (!user_id || !content) { res.status(400).json({ error: "Missing user_id or content" }); return; }
-  const [msg] = await db.insert(dmMessagesTable).values({ conversationId, userId: user_id, content }).returning();
+router.post("/community/dm/conversation/:conversationId/messages", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthedRequest).clerkUserId;
+  const conversationId = req.params.conversationId as string;
+  const { content } = req.body as { content?: string };
+  if (!content?.trim()) { res.status(400).json({ error: "Missing content" }); return; }
+  const [msg] = await db.insert(dmMessagesTable).values({ conversationId, userId, content: content.trim() }).returning();
   res.status(201).json(msg);
 });
 
+// ── Voice ────────────────────────────────────────────────────────────────────
+
 router.get("/community/voice/:channelId/participants", async (req, res): Promise<void> => {
-  const channelId = Array.isArray(req.params.channelId) ? req.params.channelId[0] : req.params.channelId;
+  const channelId = req.params.channelId as string;
   const participants = await db.select().from(voiceParticipantsTable).where(eq(voiceParticipantsTable.channelId, channelId));
   res.json(participants);
 });
 
-router.post("/community/voice/:channelId/join", async (req, res): Promise<void> => {
-  const channelId = Array.isArray(req.params.channelId) ? req.params.channelId[0] : req.params.channelId;
-  const { user_id, username } = req.body;
-  if (!user_id) { res.status(400).json({ error: "Missing user_id" }); return; }
-  await db.delete(voiceParticipantsTable).where(and(eq(voiceParticipantsTable.channelId, channelId), eq(voiceParticipantsTable.userId, user_id)));
-  const [p] = await db.insert(voiceParticipantsTable).values({ channelId, userId: user_id, username: username || null }).returning();
+router.post("/community/voice/:channelId/join", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthedRequest).clerkUserId;
+  const channelId = req.params.channelId as string;
+  const { username } = req.body as { username?: string };
+  await db.delete(voiceParticipantsTable).where(and(eq(voiceParticipantsTable.channelId, channelId), eq(voiceParticipantsTable.userId, userId)));
+  const [p] = await db.insert(voiceParticipantsTable).values({ channelId, userId, username: username || null }).returning();
   res.status(201).json(p);
 });
 
-router.delete("/community/voice/:channelId/leave/:userId", async (req, res): Promise<void> => {
-  const channelId = Array.isArray(req.params.channelId) ? req.params.channelId[0] : req.params.channelId;
-  const userId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
+router.delete("/community/voice/:channelId/leave/:userId", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthedRequest).clerkUserId;
+  const channelId = req.params.channelId as string;
   await db.delete(voiceParticipantsTable).where(and(eq(voiceParticipantsTable.channelId, channelId), eq(voiceParticipantsTable.userId, userId)));
   res.sendStatus(204);
 });
