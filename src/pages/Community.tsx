@@ -33,7 +33,7 @@ const CommunityPage = () => {
       <main className="container px-4 py-6">
         <Community />
       </main>
-      <NewSnippetDialog open={showNewDialog} onOpenChange={setShowNewDialog} onSubmit={handleNewSnippet} />
+      <NewSnippetDialog open={showNewDialog} onClose={() => setShowNewDialog(false)} onSubmit={handleNewSnippet} />
     </div>
   );
 };
