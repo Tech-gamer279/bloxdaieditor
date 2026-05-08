@@ -11,8 +11,9 @@ import MemberList from "./MemberList";
 import ChatRoom from "./ChatRoom";
 import VoiceRoom from "./VoiceRoom";
 import DMPanel from "./DMPanel";
-import type { Server, Channel, Member } from "./types";
-import { Users } from "lucide-react";
+import type { Server, Channel, Member, PublicServer } from "./types";
+import { Users, Globe, Hash } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 const Community = () => {
   const { user } = useAuth();
