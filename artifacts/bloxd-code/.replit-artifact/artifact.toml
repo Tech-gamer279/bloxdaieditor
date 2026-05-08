@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Bloxd.code"
+version = "1.0.0"
+id = "artifacts/bloxd-code"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23740
+
+[services.development]
+run = "pnpm --filter @workspace/bloxd-code run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/bloxd-code", "run", "build" ]
+publicDir = "artifacts/bloxd-code/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23740"
+BASE_PATH = "/"
