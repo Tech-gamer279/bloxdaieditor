@@ -9,6 +9,7 @@ import schematicsRouter from "./schematics";
 import modsRouter from "./mods";
 import badgesRouter from "./badges";
 import notificationsRouter from "./notifications";
+import friendsRouter from "./friends";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(schematicsRouter);
 router.use(modsRouter);
 router.use(badgesRouter);
 router.use(notificationsRouter);
+router.use(friendsRouter);
 
 export default router;

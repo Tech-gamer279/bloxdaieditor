@@ -16,11 +16,33 @@ router.get("/notifications", requireAuth, async (req, res): Promise<void> => {
   res.json(rows);
 });
 
-/** GET /notifications/unread-count — returns { count: N }. */
+/** GET /notifications/:userId — same as above; verifies caller owns the resource. */
+router.get("/notifications/:userId", requireAuth, async (req, res): Promise<void> => {
+  const caller = (req as AuthedRequest).clerkUserId;
+  const targetParam = req.params.userId as string;
+  if (caller !== targetParam) { res.status(403).json({ error: "Forbidden" }); return; }
+  const rows = await db.select().from(notificationsTable)
+    .where(eq(notificationsTable.targetUserId, caller))
+    .orderBy(desc(notificationsTable.createdAt))
+    .limit(50);
+  res.json(rows);
+});
+
+/** GET /notifications/unread-count — returns { count: N } for the caller. */
 router.get("/notifications/unread-count", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as AuthedRequest).clerkUserId;
   const rows = await db.select({ id: notificationsTable.id }).from(notificationsTable)
     .where(and(eq(notificationsTable.targetUserId, userId), eq(notificationsTable.read, false)));
+  res.json({ count: rows.length });
+});
+
+/** GET /notifications/:userId/unread-count — same, with explicit userId ownership check. */
+router.get("/notifications/:userId/unread-count", requireAuth, async (req, res): Promise<void> => {
+  const caller = (req as AuthedRequest).clerkUserId;
+  const targetParam = req.params.userId as string;
+  if (caller !== targetParam) { res.status(403).json({ error: "Forbidden" }); return; }
+  const rows = await db.select({ id: notificationsTable.id }).from(notificationsTable)
+    .where(and(eq(notificationsTable.targetUserId, caller), eq(notificationsTable.read, false)));
   res.json({ count: rows.length });
 });
 

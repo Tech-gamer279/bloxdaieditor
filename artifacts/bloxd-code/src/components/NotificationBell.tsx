@@ -16,6 +16,14 @@ const TYPE_LABELS: Record<string, { emoji: string; text: (n: AppNotification) =>
     emoji: "🏅",
     text: (n) => `You were awarded the "${n.resourceTitle ?? "badge"}" badge`,
   },
+  friend_request: {
+    emoji: "🤝",
+    text: (n) => `${n.actorName ?? "Someone"} sent you a friend request`,
+  },
+  friend_request_accepted: {
+    emoji: "✅",
+    text: (n) => `${n.actorName ?? "Someone"} accepted your friend request`,
+  },
 };
 
 function timeAgo(iso: string): string {
@@ -32,7 +40,6 @@ const NotificationBell = () => {
   const { notifications, unreadCount, open, setOpen, openDropdown, markRead, markAllRead } = useNotifications();
   const ref = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
@@ -60,7 +67,6 @@ const NotificationBell = () => {
 
       {open && (
         <div className="absolute right-0 top-full mt-2 w-80 max-h-[420px] flex flex-col rounded-xl border border-border bg-card shadow-2xl z-[100]">
-          {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
             <span className="font-semibold text-sm text-foreground">Notifications</span>
             {notifications.some((n) => !n.read) && (
@@ -74,7 +80,6 @@ const NotificationBell = () => {
             )}
           </div>
 
-          {/* List */}
           <div className="overflow-y-auto flex-1">
             {notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-muted-foreground text-sm gap-2">
