@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { profilesApi, snippetsApi } from "@/lib/demo-data";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Code2, Heart, Eye, Trophy, User } from "lucide-react";
@@ -29,15 +29,26 @@ const PublicProfile = () => {
 
   useEffect(() => {
     if (!username) return;
-    (async () => {
-      const { data: p } = await supabase.from("profiles").select("*").eq("username", username).maybeSingle();
-      if (p) {
-        setProfile(p as Profile);
-        const { data: s } = await supabase.from("snippets").select("id,title,likes,views,created_at").eq("user_id", p.user_id).order("created_at", { ascending: false });
-        setSnippets((s || []) as Snip[]);
-      }
-      setLoading(false);
-    })();
+    
+    // Get profile from demo data
+    const p = profilesApi.getByUsername(username);
+    if (p) {
+      setProfile(p as Profile);
+      
+      // Get user's snippets
+      const allSnippets = snippetsApi.getAll();
+      const userSnippets = allSnippets
+        .filter(s => s.user_id === p.user_id)
+        .map(s => ({
+          id: s.id,
+          title: s.title,
+          likes: s.likes,
+          views: s.views,
+          created_at: s.created_at,
+        }));
+      setSnippets(userSnippets);
+    }
+    setLoading(false);
   }, [username]);
 
   return (
@@ -61,7 +72,7 @@ const PublicProfile = () => {
                 <div className="flex items-center justify-center gap-2 mt-1 text-sm">
                   <Trophy className="h-4 w-4 text-yellow-400" />
                   <span className="text-yellow-400 font-semibold">{rankTitle(profile.rank_points)}</span>
-                  <span className="text-muted-foreground">• {profile.rank_points} pts</span>
+                  <span className="text-muted-foreground">- {profile.rank_points} pts</span>
                 </div>
                 {profile.bio && <p className="text-sm text-muted-foreground mt-3 max-w-md">{profile.bio}</p>}
               </div>

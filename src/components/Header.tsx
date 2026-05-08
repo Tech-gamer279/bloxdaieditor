@@ -32,7 +32,7 @@ const Header = ({ onNewSnippet }: HeaderProps) => {
           {user ? (
             <>
               <span className="text-xs text-muted-foreground hidden sm:inline">
-                {user.email}
+                {user.username || user.email}
               </span>
               <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)}>
                 <Settings className="h-4 w-4" />

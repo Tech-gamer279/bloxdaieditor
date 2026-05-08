@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Copy, Heart, Eye, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { snippetsApi, notifyChange } from "@/lib/demo-data";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface Snippet {
@@ -21,6 +21,22 @@ interface SnippetCardProps {
   onClick: () => void;
 }
 
+// Store likes in localStorage
+const LIKES_KEY = 'bloxd_demo_snippet_likes';
+
+const getLikedSnippets = (userId: string): Set<string> => {
+  try {
+    const stored = localStorage.getItem(`${LIKES_KEY}_${userId}`);
+    return stored ? new Set(JSON.parse(stored)) : new Set();
+  } catch {
+    return new Set();
+  }
+};
+
+const saveLikedSnippets = (userId: string, likes: Set<string>) => {
+  localStorage.setItem(`${LIKES_KEY}_${userId}`, JSON.stringify([...likes]));
+};
+
 const SnippetCard = ({ snippet, onClick }: SnippetCardProps) => {
   const { user } = useAuth();
   const [liked, setLiked] = useState(false);
@@ -31,13 +47,8 @@ const SnippetCard = ({ snippet, onClick }: SnippetCardProps) => {
 
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("snippet_likes")
-      .select("id")
-      .eq("snippet_id", snippet.id)
-      .eq("user_id", user.id)
-      .maybeSingle()
-      .then(({ data }) => setLiked(!!data));
+    const likedSnippets = getLikedSnippets(user.id);
+    setLiked(likedSnippets.has(snippet.id));
   }, [user, snippet.id]);
 
   useEffect(() => {
@@ -53,15 +64,20 @@ const SnippetCard = ({ snippet, onClick }: SnippetCardProps) => {
     if (loading) return;
     setLoading(true);
 
+    const likedSnippets = getLikedSnippets(user.id);
+    
     if (liked) {
       setLiked(false);
       setLikeCount((c) => c - 1);
-      await supabase.from("snippet_likes").delete().eq("snippet_id", snippet.id).eq("user_id", user.id);
+      likedSnippets.delete(snippet.id);
     } else {
       setLiked(true);
       setLikeCount((c) => c + 1);
-      await supabase.from("snippet_likes").insert({ snippet_id: snippet.id, user_id: user.id });
+      likedSnippets.add(snippet.id);
+      snippetsApi.like(snippet.id);
     }
+    
+    saveLikedSnippets(user.id, likedSnippets);
     setLoading(false);
   };
 
@@ -76,12 +92,10 @@ const SnippetCard = ({ snippet, onClick }: SnippetCardProps) => {
     if (!isOwner) return;
     const confirmed = window.confirm("Delete this snippet?");
     if (!confirmed) return;
-    const { error } = await supabase.from("snippets").delete().eq("id", snippet.id);
-    if (error) {
-      toast({ title: "Error", description: "Failed to delete snippet", variant: "destructive" });
-    } else {
-      toast({ title: "Deleted", description: "Snippet removed" });
-    }
+    
+    snippetsApi.delete(snippet.id);
+    notifyChange();
+    toast({ title: "Deleted", description: "Snippet removed" });
   };
 
   return (

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { profilesApi } from "@/lib/demo-data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -40,52 +40,63 @@ const FriendManager = ({ userId }: FriendManagerProps) => {
     window.localStorage.setItem(storageKey, JSON.stringify(nextFriends));
   };
 
-  const handleAddFriend = async () => {
+  const handleAddFriend = () => {
     const trimmed = query.trim();
     if (!trimmed) {
-      toast({ title: "Enter a username", description: "Search by username or user ID.", variant: "destructive" });
+      toast({ title: "Enter a username", description: "Search by username to add a friend.", variant: "destructive" });
       return;
     }
     setAdding(true);
 
-    try {
-      const queryExpr = trimmed.includes("@") ? `username.ilike.%${trimmed}%` : `username.ilike.%${trimmed}%`;
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("user_id,username,avatar_url")
-        .ilike("username", `%${trimmed}%`)
-        .limit(1)
-        .single();
-
-      if (error || !data) {
-        toast({ title: "Friend not found", description: "Try a different username.", variant: "destructive" });
+    // Search in demo profiles
+    const profile = profilesApi.getByUsername(trimmed);
+    
+    if (!profile) {
+      // In demo mode, create a placeholder friend if not found
+      const newFriend: Friend = {
+        id: Math.random().toString(36).substring(2),
+        username: trimmed,
+        avatar_url: null,
+        addedAt: new Date().toISOString(),
+      };
+      
+      if (friends.some((friend) => friend.username.toLowerCase() === trimmed.toLowerCase())) {
+        toast({ title: "Already added", description: `${trimmed} is already a friend.` });
+        setAdding(false);
         return;
       }
-
-      if (data.user_id === userId) {
-        toast({ title: "That’s you", description: "You can’t add yourself as a friend.", variant: "destructive" });
-        return;
-      }
-
-      if (friends.some((friend) => friend.id === data.user_id)) {
-        toast({ title: "Already added", description: `${data.username || "This user"} is already a friend.` });
-        return;
-      }
-
-      persist([
-        ...friends,
-        {
-          id: data.user_id,
-          username: data.username || "Unnamed",
-          avatar_url: data.avatar_url,
-          addedAt: new Date().toISOString(),
-        },
-      ]);
+      
+      persist([...friends, newFriend]);
       setQuery("");
-      toast({ title: "Friend added", description: `You can now message ${data.username || "this friend"}.` });
-    } finally {
+      toast({ title: "Friend added", description: `${trimmed} added to your friends list.` });
       setAdding(false);
+      return;
     }
+
+    if (profile.user_id === userId) {
+      toast({ title: "That's you", description: "You can't add yourself as a friend.", variant: "destructive" });
+      setAdding(false);
+      return;
+    }
+
+    if (friends.some((friend) => friend.id === profile.user_id)) {
+      toast({ title: "Already added", description: `${profile.username || "This user"} is already a friend.` });
+      setAdding(false);
+      return;
+    }
+
+    persist([
+      ...friends,
+      {
+        id: profile.user_id,
+        username: profile.username || "Unnamed",
+        avatar_url: profile.avatar_url,
+        addedAt: new Date().toISOString(),
+      },
+    ]);
+    setQuery("");
+    toast({ title: "Friend added", description: `You can now see ${profile.username || "this friend"} in your list.` });
+    setAdding(false);
   };
 
   const removeFriend = (id: string) => {
@@ -106,12 +117,13 @@ const FriendManager = ({ userId }: FriendManagerProps) => {
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAddFriend()}
             placeholder="Search by username"
             className="min-w-[220px]"
           />
           <Button onClick={handleAddFriend} disabled={adding} size="sm">
             <UserPlus className="h-4 w-4 mr-2" />
-            {adding ? "Adding…" : "Add Friend"}
+            {adding ? "Adding..." : "Add Friend"}
           </Button>
         </div>
       </div>
