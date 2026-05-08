@@ -27,8 +27,8 @@ const ChannelList = ({ server, channels, activeChannelId, isAdmin, onSelect, onC
   const voice = channels.filter((c) => c.type === "voice");
 
   const copyInvite = () => {
-    navigator.clipboard.writeText(server.invite_code);
-    toast({ title: "Invite copied", description: server.invite_code });
+    navigator.clipboard.writeText(server.inviteCode);
+    toast({ title: "Invite copied", description: server.inviteCode });
   };
 
   return (

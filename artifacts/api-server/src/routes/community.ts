@@ -272,6 +272,12 @@ router.get("/community/voice/:channelId/participants", requireAuth, async (req, 
 router.post("/community/voice/:channelId/join", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as AuthedRequest).clerkUserId;
   const channelId = req.params.channelId as string;
+  const [channel] = await db.select().from(channelsTable).where(eq(channelsTable.id, channelId));
+  if (!channel) { res.status(404).json({ error: "Channel not found" }); return; }
+  const membership = await db.select().from(serverMembersTable).where(
+    and(eq(serverMembersTable.serverId, channel.serverId), eq(serverMembersTable.userId, userId))
+  );
+  if (!membership.length) { res.status(403).json({ error: "Not a member" }); return; }
   const { username } = req.body as { username?: string };
   await db.delete(voiceParticipantsTable).where(
     and(eq(voiceParticipantsTable.channelId, channelId), eq(voiceParticipantsTable.userId, userId))

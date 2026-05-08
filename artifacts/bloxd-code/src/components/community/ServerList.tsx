@@ -27,8 +27,8 @@ const ServerList = ({ servers, activeId, onSelect, onCreate, onJoin, onBrowse }:
               : "bg-card text-foreground hover:bg-primary/20 hover:rounded-xl"
           )}
         >
-          {s.icon_url ? (
-            <img src={s.icon_url} alt={s.name} className="w-full h-full object-cover" />
+          {s.iconUrl ? (
+            <img src={s.iconUrl} alt={s.name} className="w-full h-full object-cover" />
           ) : (
             s.name.slice(0, 2).toUpperCase()
           )}

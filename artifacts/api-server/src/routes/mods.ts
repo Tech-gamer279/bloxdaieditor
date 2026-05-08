@@ -38,21 +38,29 @@ router.post("/mods", requireAuth, async (req, res): Promise<void> => {
 router.post("/mods/:id/like", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as AuthedRequest).clerkUserId;
   const modId = req.params.id as string;
-  const existing = await db.select().from(modLikesTable).where(and(eq(modLikesTable.modId, modId), eq(modLikesTable.userId, userId)));
+  const existing = await db.select().from(modLikesTable).where(
+    and(eq(modLikesTable.modId, modId), eq(modLikesTable.userId, userId))
+  );
   if (existing.length) {
     await db.delete(modLikesTable).where(eq(modLikesTable.id, existing[0].id));
-    await db.update(modsTable).set({ likes: sql`GREATEST(${modsTable.likes} - 1, 0)` } as any).where(eq(modsTable.id, modId));
+    await db.update(modsTable)
+      .set({ likes: sql<number>`GREATEST(${modsTable.likes} - 1, 0)` })
+      .where(eq(modsTable.id, modId));
     res.json({ liked: false });
   } else {
     await db.insert(modLikesTable).values({ modId, userId });
-    await db.update(modsTable).set({ likes: sql`${modsTable.likes} + 1` } as any).where(eq(modsTable.id, modId));
+    await db.update(modsTable)
+      .set({ likes: sql<number>`${modsTable.likes} + 1` })
+      .where(eq(modsTable.id, modId));
     res.json({ liked: true });
   }
 });
 
 router.post("/mods/:id/download", async (req, res): Promise<void> => {
   const id = req.params.id as string;
-  await db.update(modsTable).set({ downloads: sql`${modsTable.downloads} + 1` } as any).where(eq(modsTable.id, id));
+  await db.update(modsTable)
+    .set({ downloads: sql<number>`${modsTable.downloads} + 1` })
+    .where(eq(modsTable.id, id));
   res.sendStatus(204);
 });
 

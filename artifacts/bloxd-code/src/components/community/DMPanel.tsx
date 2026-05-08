@@ -6,10 +6,10 @@ import { Send, X } from "lucide-react";
 
 interface DMMessage {
   id: string;
-  conversation_id: string;
-  user_id: string;
+  conversationId: string;
+  userId: string;
   content: string;
-  created_at: string;
+  createdAt: string;
 }
 
 interface Props {
@@ -56,7 +56,7 @@ const DMPanel = ({ conversationId, otherName, userId, onClose }: Props) => {
     try {
       await apiFetch(`/community/dm/conversation/${conversationId}/messages`, {
         method: "POST",
-        body: JSON.stringify({ user_id: userId, content }),
+        body: JSON.stringify({ content }),
       });
       await fetchMsgs();
     } catch {}
@@ -71,8 +71,8 @@ const DMPanel = ({ conversationId, otherName, userId, onClose }: Props) => {
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-2 space-y-2">
         {messages.length === 0 && <p className="text-xs text-center text-muted-foreground py-4">Start a conversation!</p>}
         {messages.map((m) => (
-          <div key={m.id} className={`flex ${m.user_id === userId ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[80%] px-3 py-1.5 rounded-2xl text-sm ${m.user_id === userId ? "bg-primary text-primary-foreground" : "bg-secondary"}`}>
+          <div key={m.id} className={`flex ${m.userId === userId ? "justify-end" : "justify-start"}`}>
+            <div className={`max-w-[80%] px-3 py-1.5 rounded-2xl text-sm ${m.userId === userId ? "bg-primary text-primary-foreground" : "bg-secondary"}`}>
               {m.content}
             </div>
           </div>

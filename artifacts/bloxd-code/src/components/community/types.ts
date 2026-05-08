@@ -1,24 +1,23 @@
 export interface Server {
   id: string;
   name: string;
-  icon_url: string | null;
-  owner_id: string;
-  invite_code: string;
-  is_public?: boolean;
+  iconUrl: string | null;
+  ownerId: string;
+  inviteCode: string;
+  isPublic?: boolean;
 }
 
 export interface PublicServer {
   id: string;
   name: string;
-  icon_url: string | null;
-  invite_code: string;
-  member_count: number;
-  created_at: string;
+  iconUrl: string | null;
+  inviteCode: string;
+  createdAt: string;
 }
 
 export interface Channel {
   id: string;
-  server_id: string;
+  serverId: string;
   name: string;
   type: "text" | "voice";
   position: number;
@@ -26,32 +25,32 @@ export interface Channel {
 
 export interface Message {
   id: string;
-  channel_id: string;
-  user_id: string;
-  author_name: string;
+  channelId: string;
+  userId: string;
+  authorName: string;
   content: string;
-  created_at: string;
+  createdAt: string;
 }
 
 export interface Member {
   id: string;
-  server_id: string;
-  user_id: string;
+  serverId: string;
+  userId: string;
   role: "owner" | "admin" | "member";
   username?: string | null;
-  avatar_url?: string | null;
+  avatarUrl?: string | null;
 }
 
 export interface Reaction {
   id: string;
-  message_id: string;
-  user_id: string;
+  messageId: string;
+  userId: string;
   emoji: string;
 }
 
 export interface VoiceParticipant {
   id: string;
-  channel_id: string;
-  user_id: string;
+  channelId: string;
+  userId: string;
   username: string | null;
 }

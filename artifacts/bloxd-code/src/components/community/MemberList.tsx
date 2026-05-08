@@ -14,26 +14,26 @@ const roleIcon = (r: string) =>
   r === "owner" ? <Crown className="h-3 w-3 text-yellow-400" /> : r === "admin" ? <Shield className="h-3 w-3 text-primary" /> : null;
 
 const MemberList = ({ members, onlineIds, onDM, onBan, currentUserId, isAdmin }: Props) => {
-  const online = members.filter((m) => onlineIds.has(m.user_id));
-  const offline = members.filter((m) => !onlineIds.has(m.user_id));
+  const online = members.filter((m) => onlineIds.has(m.userId));
+  const offline = members.filter((m) => !onlineIds.has(m.userId));
 
   const Row = ({ m, dim }: { m: Member; dim?: boolean }) => (
     <div className={`w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-secondary/50 group ${dim ? "opacity-50" : ""}`}>
       <button
         type="button"
-        onClick={() => onDM(m.user_id)}
+        onClick={() => onDM(m.userId)}
         className="flex-1 flex items-center gap-2 text-left"
       >
         <div className="relative">
           <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold overflow-hidden">
-            {m.avatar_url ? <img src={m.avatar_url} className="w-full h-full object-cover" /> : (m.username || "?").slice(0, 2).toUpperCase()}
+            {m.avatarUrl ? <img src={m.avatarUrl} className="w-full h-full object-cover" /> : (m.username || "?").slice(0, 2).toUpperCase()}
           </div>
           {!dim && <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-card" />}
         </div>
         <span className="flex-1 text-sm truncate">{m.username || "anonymous"}</span>
         {roleIcon(m.role)}
       </button>
-      {isAdmin && currentUserId !== m.user_id && m.role !== "owner" && (
+      {isAdmin && currentUserId !== m.userId && m.role !== "owner" && (
         <button
           type="button"
           onClick={() => onBan(m)}

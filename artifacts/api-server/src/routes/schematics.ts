@@ -28,8 +28,8 @@ router.post("/schematics", requireAuth, async (req, res): Promise<void> => {
   const authorName = profile?.username || "anonymous";
   const [schematic] = await db.insert(schematicsTable).values({
     userId, authorName, title: title.trim(),
-    description: description?.trim() || null, fileUrl: file_url || null,
-    fileName: file_name || null, previewUrl: preview_url || null,
+    description: description?.trim() || null,
+    fileUrl: file_url || null, fileName: file_name || null, previewUrl: preview_url || null,
   }).returning();
   res.status(201).json({ ...schematic, liked: false });
 });
@@ -37,21 +37,29 @@ router.post("/schematics", requireAuth, async (req, res): Promise<void> => {
 router.post("/schematics/:id/like", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as AuthedRequest).clerkUserId;
   const schematicId = req.params.id as string;
-  const existing = await db.select().from(schematicLikesTable).where(and(eq(schematicLikesTable.schematicId, schematicId), eq(schematicLikesTable.userId, userId)));
+  const existing = await db.select().from(schematicLikesTable).where(
+    and(eq(schematicLikesTable.schematicId, schematicId), eq(schematicLikesTable.userId, userId))
+  );
   if (existing.length) {
     await db.delete(schematicLikesTable).where(eq(schematicLikesTable.id, existing[0].id));
-    await db.update(schematicsTable).set({ likes: sql`GREATEST(${schematicsTable.likes} - 1, 0)` } as any).where(eq(schematicsTable.id, schematicId));
+    await db.update(schematicsTable)
+      .set({ likes: sql<number>`GREATEST(${schematicsTable.likes} - 1, 0)` })
+      .where(eq(schematicsTable.id, schematicId));
     res.json({ liked: false });
   } else {
     await db.insert(schematicLikesTable).values({ schematicId, userId });
-    await db.update(schematicsTable).set({ likes: sql`${schematicsTable.likes} + 1` } as any).where(eq(schematicsTable.id, schematicId));
+    await db.update(schematicsTable)
+      .set({ likes: sql<number>`${schematicsTable.likes} + 1` })
+      .where(eq(schematicsTable.id, schematicId));
     res.json({ liked: true });
   }
 });
 
 router.post("/schematics/:id/download", async (req, res): Promise<void> => {
   const id = req.params.id as string;
-  await db.update(schematicsTable).set({ downloads: sql`${schematicsTable.downloads} + 1` } as any).where(eq(schematicsTable.id, id));
+  await db.update(schematicsTable)
+    .set({ downloads: sql<number>`${schematicsTable.downloads} + 1` })
+    .where(eq(schematicsTable.id, id));
   res.sendStatus(204);
 });
 

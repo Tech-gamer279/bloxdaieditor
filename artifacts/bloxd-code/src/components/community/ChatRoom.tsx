@@ -119,11 +119,11 @@ const ChatRoom = ({ channelId, channelName, userId, username, isAdmin }: Props) 
     try {
       await apiFetch(`/community/channels/${channelId}/messages`, {
         method: "POST",
-        body: JSON.stringify({ user_id: userId, author_name: username, content }),
+        body: JSON.stringify({ author_name: username, content }),
       });
       await pollMessages();
-    } catch (e: any) {
-      toast({ title: "Failed", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      toast({ title: "Failed", description: (e as Error).message, variant: "destructive" });
     }
   };
 
@@ -134,11 +134,11 @@ const ChatRoom = ({ channelId, channelName, userId, username, isAdmin }: Props) 
     try {
       await apiFetch("/community/reports", {
         method: "POST",
-        body: JSON.stringify({ reporter_id: userId, target_type: "message", target_id: messageId, target_user_id: msg?.user_id ?? null, reason: reason.trim() }),
+        body: JSON.stringify({ target_type: "message", target_id: messageId, target_user_id: msg?.userId ?? null, reason: reason.trim() }),
       });
       toast({ title: "Reported", description: "Thanks! The team has been notified." });
-    } catch (e: any) {
-      toast({ title: "Report failed", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      toast({ title: "Report failed", description: (e as Error).message, variant: "destructive" });
     }
   };
 
@@ -147,7 +147,7 @@ const ChatRoom = ({ channelId, channelName, userId, username, isAdmin }: Props) 
     try {
       await apiFetch(`/community/messages/${messageId}/reactions`, {
         method: "POST",
-        body: JSON.stringify({ user_id: userId, emoji }),
+        body: JSON.stringify({ emoji }),
       });
       await pollMessages();
     } catch {}
@@ -168,10 +168,10 @@ const ChatRoom = ({ channelId, channelName, userId, username, isAdmin }: Props) 
 
   const groupedReactions = (msgId: string) => {
     const map = new Map<string, { count: number; mine: boolean }>();
-    reactions.filter((r) => r.message_id === msgId).forEach((r) => {
+    reactions.filter((r) => r.messageId === msgId).forEach((r) => {
       const cur = map.get(r.emoji) || { count: 0, mine: false };
       cur.count++;
-      if (r.user_id === userId) cur.mine = true;
+      if (r.userId === userId) cur.mine = true;
       map.set(r.emoji, cur);
     });
     return Array.from(map.entries());
@@ -196,12 +196,12 @@ const ChatRoom = ({ channelId, channelName, userId, username, isAdmin }: Props) 
         {messages.map((m) => (
           <div key={m.id} className="group flex gap-3 hover:bg-secondary/20 -mx-2 px-2 py-1 rounded">
             <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold shrink-0">
-              {m.author_name.slice(0, 2).toUpperCase()}
+              {m.authorName.slice(0, 2).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-2">
-                <span className="font-semibold text-sm">{m.author_name}</span>
-                <span className="text-[10px] text-muted-foreground">{new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                <span className="font-semibold text-sm">{m.authorName}</span>
+                <span className="text-[10px] text-muted-foreground">{new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
               </div>
               <div className="text-sm text-foreground/90 whitespace-pre-wrap break-words">{renderContent(m.content)}</div>
               <div className="flex flex-wrap gap-1 mt-1">
@@ -216,7 +216,7 @@ const ChatRoom = ({ channelId, channelName, userId, username, isAdmin }: Props) 
               <button onClick={() => setPickerFor(pickerFor === m.id ? null : m.id)} className="p-1 hover:bg-secondary rounded"><Smile className="h-3.5 w-3.5" /></button>
               <button onClick={() => addCustomReaction(m.id)} className="p-1 hover:bg-secondary rounded"><Plus className="h-3.5 w-3.5" /></button>
               <button onClick={() => reportMessage(m.id)} className="p-1 hover:bg-secondary rounded text-amber-500"><Flag className="h-3.5 w-3.5" /></button>
-              {(m.user_id === userId || isAdmin) && (
+              {(m.userId === userId || isAdmin) && (
                 <button onClick={() => deleteMsg(m.id)} className="p-1 hover:bg-destructive/20 rounded text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
               )}
               {pickerFor === m.id && (

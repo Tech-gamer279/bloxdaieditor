@@ -59,16 +59,16 @@ const VoiceRoom = ({ channelId, channelName, userId, username }: Props) => {
       localStream.current = stream;
       await apiFetch(`/community/voice/${channelId}/join`, {
         method: "POST",
-        body: JSON.stringify({ user_id: userId, username }),
+        body: JSON.stringify({ username }),
       });
       setConnected(true);
       const list = await fetchParticipants();
       for (const p of list) {
-        if (p.user_id !== userId) createPeer(p.user_id, true);
+        if (p.userId !== userId) createPeer(p.userId, true);
       }
       participantPollRef.current = setInterval(fetchParticipants, 3000);
-    } catch (e: any) {
-      toast({ title: "Mic error", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      toast({ title: "Mic error", description: (e as Error).message, variant: "destructive" });
     }
   };
 
