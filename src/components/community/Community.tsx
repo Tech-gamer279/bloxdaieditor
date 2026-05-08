@@ -54,13 +54,17 @@ const Community = () => {
     });
   }, [user]);
 
-  // Load servers
-  const loadServers = async () => {
-    const { data } = await supabase.from("servers").select("*").order("created_at");
+  // Load servers the user is a member of
+  const loadServers = async (currentUser: typeof user) => {
+    if (!currentUser) return;
+    const { data: memberOf } = await supabase.from("server_members").select("server_id").eq("user_id", currentUser.id);
+    if (!memberOf || !memberOf.length) { setServers([]); setActiveServer(null); return; }
+    const serverIds = memberOf.map((m) => m.server_id);
+    const { data } = await supabase.from("servers").select("*").in("id", serverIds).order("created_at");
     setServers((data || []) as Server[]);
     if (data && data.length && !activeServer) setActiveServer(data[0] as Server);
   };
-  useEffect(() => { if (user) loadServers(); }, [user]);
+  useEffect(() => { if (user) loadServers(user); }, [user]);
 
   const loadServerData = async (server: Server) => {
     const [chRes, memRes] = await Promise.all([
@@ -107,54 +111,21 @@ const Community = () => {
   }, [activeServer, user]);
 
   const createServer = async () => {
-    if (!newName.trim()) return;
+    if (!newName.trim() || !user) return;
     const { data, error } = await supabase.rpc("create_server", { _name: newName.trim() });
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
-    const newId = data as string;
-    if (newPublic) {
-      await supabase.from("servers").update({ is_public: true }).eq("id", newId);
-    }
-    setNewName(""); setNewPublic(false); setCreateOpen(false);
-    await loadServers();
-    const { data: s } = await supabase.from("servers").select("*").eq("id", newId).single();
-    if (s) setActiveServer(s as Server);
-  };
-
-  const togglePublic = async () => {
-    if (!activeServer || activeServer.owner_id !== user?.id) return;
-    const next = !activeServer.is_public;
-    const { error } = await supabase.from("servers").update({ is_public: next }).eq("id", activeServer.id);
-    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
-    toast({ title: next ? "Server is now public" : "Server set to private" });
-    setActiveServer({ ...activeServer, is_public: next });
-    await loadServers();
-  };
-
-  const openBrowse = async () => {
-    setBrowseOpen(true);
-    setBrowseLoading(true);
-    const { data, error } = await supabase.rpc("list_public_servers");
-    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    setPublicServers((data || []) as PublicServer[]);
-    setBrowseLoading(false);
-  };
-
-  const joinPublic = async (id: string) => {
-    const { error } = await supabase.rpc("join_public_server", { _server: id });
-    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Joined!" });
-    setBrowseOpen(false);
-    await loadServers();
-    const { data: s } = await supabase.from("servers").select("*").eq("id", id).single();
+    setNewName(""); setCreateOpen(false);
+    await loadServers(user);
+    const { data: s } = await supabase.from("servers").select("*").eq("id", data as string).single();
     if (s) setActiveServer(s as Server);
   };
 
   const joinServer = async () => {
-    if (!inviteCode.trim()) return;
+    if (!inviteCode.trim() || !user) return;
     const { data, error } = await supabase.rpc("join_server_by_invite", { _code: inviteCode.trim() });
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
     setInviteCode(""); setJoinOpen(false);
-    await loadServers();
+    await loadServers(user);
     const { data: s } = await supabase.from("servers").select("*").eq("id", data as string).single();
     if (s) setActiveServer(s as Server);
   };
@@ -173,7 +144,7 @@ const Community = () => {
     if (!confirm(`Leave ${activeServer.name}?`)) return;
     await supabase.from("server_members").delete().eq("server_id", activeServer.id).eq("user_id", user.id);
     setActiveServer(null);
-    await loadServers();
+    await loadServers(user);
   };
 
   const handleBan = async () => {
