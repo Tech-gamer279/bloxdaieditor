@@ -323,10 +323,19 @@ const Community = () => {
 
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Server invite</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Server invite & visibility</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">Share this invite code with friends to let them join your server.</p>
             <div className="rounded-lg border border-border bg-background p-3 text-sm font-semibold">{activeServer?.invite_code || "-"}</div>
+            {activeServer && activeServer.owner_id === user?.id && (
+              <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Public server</p>
+                  <p className="text-xs text-muted-foreground">Show in browse list so anyone can join</p>
+                </div>
+                <Switch checked={!!activeServer.is_public} onCheckedChange={togglePublic} />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setInviteOpen(false)}>Close</Button>
