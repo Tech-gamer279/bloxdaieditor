@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { profilesApi, snippetsApi } from "@/lib/demo-data";
 import { Trophy, Medal, Star, Crown, Heart, Eye } from "lucide-react";
 
 type RankedUser = {
@@ -45,21 +45,24 @@ const Leaderboard = () => {
   const [tab, setTab] = useState<"users" | "snippets">("users");
 
   useEffect(() => {
-    const fetchData = async () => {
-      const [usersRes, snippetsRes] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("user_id, username, rank_points")
-          .order("rank_points", { ascending: false })
-          .limit(10),
-        supabase
-          .from("snippets")
-          .select("id, title, author_name, likes, views")
-          .order("likes", { ascending: false })
-          .limit(10),
-      ]);
-      if (usersRes.data) setUsers(usersRes.data);
-      if (snippetsRes.data) setTopSnippets(snippetsRes.data);
+    const fetchData = () => {
+      const profiles = profilesApi.getTopUsers(10);
+      setUsers(profiles.map(p => ({
+        user_id: p.user_id,
+        username: p.username,
+        rank_points: p.rank_points,
+      })));
+
+      const snippets = snippetsApi.getAll()
+        .sort((a, b) => b.likes - a.likes)
+        .slice(0, 10);
+      setTopSnippets(snippets.map(s => ({
+        id: s.id,
+        title: s.title,
+        author_name: s.author_name,
+        likes: s.likes,
+        views: s.views,
+      })));
     };
     fetchData();
   }, []);

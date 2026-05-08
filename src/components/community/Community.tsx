@@ -1,181 +1,75 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import ServerList from "./ServerList";
-import ChannelList from "./ChannelList";
-import MemberList from "./MemberList";
-import ChatRoom from "./ChatRoom";
-import VoiceRoom from "./VoiceRoom";
-import DMPanel from "./DMPanel";
-import type { Server, Channel, Member, PublicServer } from "./types";
-import { Users, Globe, Hash } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
+import { Users, Hash, Send, Plus, Settings } from "lucide-react";
+
+// Demo community data stored in localStorage
+const COMMUNITY_KEY = 'bloxd_demo_community';
+
+interface Message {
+  id: string;
+  channelId: string;
+  userId: string;
+  username: string;
+  content: string;
+  timestamp: string;
+}
+
+interface Channel {
+  id: string;
+  name: string;
+  type: 'text' | 'voice';
+}
+
+const defaultChannels: Channel[] = [
+  { id: 'general', name: 'general', type: 'text' },
+  { id: 'help', name: 'help', type: 'text' },
+  { id: 'showcase', name: 'showcase', type: 'text' },
+];
+
+const getMessages = (): Message[] => {
+  try {
+    const stored = localStorage.getItem(`${COMMUNITY_KEY}_messages`);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveMessages = (messages: Message[]) => {
+  localStorage.setItem(`${COMMUNITY_KEY}_messages`, JSON.stringify(messages));
+};
 
 const Community = () => {
   const { user } = useAuth();
-  const [servers, setServers] = useState<Server[]>([]);
-  const [activeServer, setActiveServer] = useState<Server | null>(null);
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
-  const [username, setUsername] = useState("anonymous");
+  const [activeChannel, setActiveChannel] = useState<Channel>(defaultChannels[0]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [newMessage, setNewMessage] = useState('');
 
-  const [createOpen, setCreateOpen] = useState(false);
-  const [joinOpen, setJoinOpen] = useState(false);
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [browseOpen, setBrowseOpen] = useState(false);
-  const [chanOpen, setChanOpen] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newPublic, setNewPublic] = useState(false);
-  const [inviteCode, setInviteCode] = useState("");
-  const [chanName, setChanName] = useState("");
-  const [chanType, setChanType] = useState<"text" | "voice">("text");
-  const [banTarget, setBanTarget] = useState<Member | null>(null);
-  const [banDuration, setBanDuration] = useState<number>(0);
-  const [banReason, setBanReason] = useState("");
-  const [publicServers, setPublicServers] = useState<PublicServer[]>([]);
-  const [browseLoading, setBrowseLoading] = useState(false);
-
-  const [dm, setDm] = useState<{ id: string; otherId: string; otherName: string } | null>(null);
-
-  const myMembership = members.find((m) => m.user_id === user?.id);
-  const isAdmin = myMembership?.role === "owner" || myMembership?.role === "admin";
-
-  // Load profile username
   useEffect(() => {
-    if (!user) return;
-    supabase.from("profiles").select("username").eq("user_id", user.id).maybeSingle().then(({ data }) => {
-      if (data?.username) setUsername(data.username);
-    });
-  }, [user]);
+    setMessages(getMessages());
+  }, []);
 
-  // Load servers the user is a member of
-  const loadServers = async (currentUser: typeof user) => {
-    if (!currentUser) return;
-    const { data: memberOf } = await supabase.from("server_members").select("server_id").eq("user_id", currentUser.id);
-    if (!memberOf || !memberOf.length) { setServers([]); setActiveServer(null); return; }
-    const serverIds = memberOf.map((m) => m.server_id);
-    const { data } = await supabase.from("servers").select("*").in("id", serverIds).order("created_at");
-    setServers((data || []) as Server[]);
-    if (data && data.length && !activeServer) setActiveServer(data[0] as Server);
-  };
-  useEffect(() => { if (user) loadServers(user); }, [user]);
+  const channelMessages = messages.filter(m => m.channelId === activeChannel.id);
 
-  const loadServerData = async (server: Server) => {
-    const [chRes, memRes] = await Promise.all([
-      supabase.from("channels").select("*").eq("server_id", server.id).order("position"),
-      supabase.from("server_members").select("*").eq("server_id", server.id),
-    ]);
-    const ch = (chRes.data || []) as Channel[];
-    setChannels(ch);
-    const mems = (memRes.data || []) as Member[];
-    if (mems.length) {
-      const { data: profs } = await supabase.from("profiles").select("user_id,username,avatar_url").in("user_id", mems.map((m) => m.user_id));
-      const pm = new Map((profs || []).map((p) => [p.user_id, p]));
-      setMembers(mems.map((m) => ({ ...m, username: pm.get(m.user_id)?.username, avatar_url: pm.get(m.user_id)?.avatar_url })));
-    } else setMembers([]);
-    if (!activeChannel || activeChannel.server_id !== server.id) {
-      setActiveChannel(ch.find((c) => c.type === "text") || ch[0] || null);
-    }
-  };
-
-  // Load channels & members for active server
-  useEffect(() => {
-    if (!activeServer) { setChannels([]); setMembers([]); setActiveChannel(null); return; }
-    loadServerData(activeServer);
-    const sub = supabase
-      .channel(`server-${activeServer.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "channels", filter: `server_id=eq.${activeServer.id}` }, () => loadServerData(activeServer))
-      .on("postgres_changes", { event: "*", schema: "public", table: "server_members", filter: `server_id=eq.${activeServer.id}` }, () => loadServerData(activeServer))
-      .subscribe();
-    return () => { supabase.removeChannel(sub); };
-    // eslint-disable-next-line
-  }, [activeServer]);
-
-  // Presence per server
-  useEffect(() => {
-    if (!activeServer || !user) return;
-    const ch = supabase.channel(`presence-${activeServer.id}`, { config: { presence: { key: user.id } } });
-    ch.on("presence", { event: "sync" }, () => {
-      const state = ch.presenceState();
-      setOnlineIds(new Set(Object.keys(state)));
-    }).subscribe(async (status) => {
-      if (status === "SUBSCRIBED") await ch.track({ at: Date.now() });
-    });
-    return () => { supabase.removeChannel(ch); };
-  }, [activeServer, user]);
-
-  const createServer = async () => {
-    if (!newName.trim() || !user) return;
-    const { data, error } = await supabase.rpc("create_server", { _name: newName.trim() });
-    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
-    setNewName(""); setCreateOpen(false);
-    await loadServers(user);
-    const { data: s } = await supabase.from("servers").select("*").eq("id", data as string).single();
-    if (s) setActiveServer(s as Server);
-  };
-
-  const joinServer = async () => {
-    if (!inviteCode.trim() || !user) return;
-    const { data, error } = await supabase.rpc("join_server_by_invite", { _code: inviteCode.trim() });
-    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
-    setInviteCode(""); setJoinOpen(false);
-    await loadServers(user);
-    const { data: s } = await supabase.from("servers").select("*").eq("id", data as string).single();
-    if (s) setActiveServer(s as Server);
-  };
-
-  const createChannel = async () => {
-    if (!chanName.trim() || !activeServer) return;
-    const { error } = await supabase.from("channels").insert({
-      server_id: activeServer.id, name: chanName.trim(), type: chanType, position: channels.length,
-    });
-    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    setChanName(""); setChanOpen(false);
-  };
-
-  const leaveServer = async () => {
-    if (!activeServer || !user) return;
-    if (!confirm(`Leave ${activeServer.name}?`)) return;
-    await supabase.from("server_members").delete().eq("server_id", activeServer.id).eq("user_id", user.id);
-    setActiveServer(null);
-    await loadServers(user);
-  };
-
-  const handleBan = async () => {
-    if (!activeServer || !banTarget || !user) return;
-    const durationDays = banDuration;
-    const { error } = await supabase.rpc("ban_member", {
-      _server: activeServer.id,
-      _user: banTarget.user_id,
-      _reason: banReason.trim() || null,
-      _days: durationDays,
-    });
-
-    if (error) {
-      toast({ title: "Ban failed", description: error.message, variant: "destructive" });
-      return;
-    }
-
-    toast({ title: "User banned", description: `${banTarget.username || "Member"} has been banned.` });
-    setBanTarget(null);
-    setBanDuration(0);
-    setBanReason("");
-    await loadServers();
-    if (activeServer) await loadServerData(activeServer);
-  };
-
-  const openDM = async (otherId: string) => {
-    if (!user || otherId === user.id) return;
-    const { data, error } = await supabase.rpc("get_or_create_dm", { _other: otherId });
-    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
-    const other = members.find((m) => m.user_id === otherId);
-    setDm({ id: data as string, otherId, otherName: other?.username || "user" });
+  const sendMessage = () => {
+    if (!newMessage.trim() || !user) return;
+    
+    const message: Message = {
+      id: Math.random().toString(36).substring(2) + Date.now().toString(36),
+      channelId: activeChannel.id,
+      userId: user.id,
+      username: user.username || 'anonymous',
+      content: newMessage.trim(),
+      timestamp: new Date().toISOString(),
+    };
+    
+    const updated = [...messages, message];
+    setMessages(updated);
+    saveMessages(updated);
+    setNewMessage('');
   };
 
   if (!user) {
@@ -189,180 +83,110 @@ const Community = () => {
 
   return (
     <div className="flex h-[calc(100vh-9rem)] border border-border rounded-lg overflow-hidden bg-card/20">
-      <ServerList
-        servers={servers}
-        activeId={activeServer?.id || null}
-        onSelect={(id) => setActiveServer(servers.find((s) => s.id === id) || null)}
-        onCreate={() => setCreateOpen(true)}
-        onJoin={() => setJoinOpen(true)}
-        onBrowse={openBrowse}
-      />
-      <ChannelList
-        server={activeServer}
-        channels={channels}
-        activeChannelId={activeChannel?.id || null}
-        isAdmin={isAdmin}
-        onSelect={setActiveChannel}
-        onCreateChannel={() => setChanOpen(true)}
-        onLeave={leaveServer}
-        onInvite={() => setInviteOpen(true)}
-      />
-      {activeServer && activeChannel ? (
-        activeChannel.type === "text" ? (
-          <ChatRoom channelId={activeChannel.id} channelName={activeChannel.name} userId={user.id} username={username} isAdmin={isAdmin} />
-        ) : (
-          <VoiceRoom channelId={activeChannel.id} channelName={activeChannel.name} userId={user.id} username={username} />
-        )
-      ) : (
-        <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-          {activeServer ? "Pick a channel" : "Welcome to the community"}
+      {/* Channels sidebar */}
+      <div className="w-56 border-r border-border bg-card/30 flex flex-col">
+        <div className="p-3 border-b border-border">
+          <h2 className="font-semibold text-foreground flex items-center gap-2">
+            <Users className="h-4 w-4 text-primary" />
+            Bloxd Community
+          </h2>
+          <p className="text-xs text-muted-foreground mt-1">Demo Mode</p>
         </div>
-      )}
-      {activeServer && <MemberList members={members} onlineIds={onlineIds} onDM={openDM} onBan={(member) => setBanTarget(member)} currentUserId={user.id} isAdmin={isAdmin} />}
-
-      {dm && (
-        <DMPanel conversationId={dm.id} otherUserId={dm.otherId} otherName={dm.otherName} userId={user.id} onClose={() => setDm(null)} />
-      )}
-
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Create a server</DialogTitle></DialogHeader>
-          <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="My awesome server" />
-          <div className="flex items-center justify-between rounded-lg border border-border p-3">
-            <div>
-              <p className="text-sm font-medium text-foreground">Public server</p>
-              <p className="text-xs text-muted-foreground">Anyone can find and join from the browse list</p>
+        
+        <div className="p-2 flex-1 overflow-y-auto">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider px-2 py-1">Text Channels</p>
+          {defaultChannels.map(channel => (
+            <button
+              key={channel.id}
+              onClick={() => setActiveChannel(channel)}
+              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors ${
+                activeChannel.id === channel.id
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+              }`}
+            >
+              <Hash className="h-4 w-4" />
+              {channel.name}
+            </button>
+          ))}
+        </div>
+        
+        <div className="p-2 border-t border-border">
+          <div className="flex items-center gap-2 px-2 py-1.5 rounded bg-secondary/30">
+            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-semibold text-primary">
+              {(user.username || 'A').slice(0, 2).toUpperCase()}
             </div>
-            <Switch checked={newPublic} onCheckedChange={setNewPublic} />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">{user.username}</p>
+              <p className="text-xs text-muted-foreground">Online</p>
+            </div>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button variant="neon" onClick={createServer}>Create</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </div>
 
-      <Dialog open={browseOpen} onOpenChange={setBrowseOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Globe className="h-4 w-4 text-emerald-400" /> Browse public servers</DialogTitle>
-          </DialogHeader>
-          <div className="max-h-[50vh] overflow-y-auto -mx-2 px-2">
-            {browseLoading ? (
-              <p className="text-sm text-muted-foreground text-center py-6">Loading…</p>
-            ) : publicServers.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">No public servers yet. Be the first!</p>
-            ) : (
-              <div className="space-y-2">
-                {publicServers.map((s) => {
-                  const joined = servers.some((m) => m.id === s.id);
-                  return (
-                    <div key={s.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center text-primary font-bold shrink-0 overflow-hidden">
-                          {s.icon_url ? <img src={s.icon_url} className="w-full h-full object-cover" /> : s.name.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-medium text-foreground truncate">{s.name}</p>
-                          <p className="text-xs text-muted-foreground">{s.member_count} member{s.member_count === 1 ? "" : "s"}</p>
-                        </div>
-                      </div>
-                      {joined ? (
-                        <Button size="sm" variant="ghost" disabled>Joined</Button>
-                      ) : (
-                        <Button size="sm" variant="neon" onClick={() => joinPublic(s.id)}>Join</Button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={joinOpen} onOpenChange={setJoinOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Join with invite code</DialogTitle></DialogHeader>
-          <Input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="abc12345" />
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setJoinOpen(false)}>Cancel</Button>
-            <Button variant="neon" onClick={joinServer}>Join</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Server invite & visibility</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">Share this invite code with friends to let them join your server.</p>
-            <div className="rounded-lg border border-border bg-background p-3 text-sm font-semibold">{activeServer?.invite_code || "-"}</div>
-            {activeServer && activeServer.owner_id === user?.id && (
-              <div className="flex items-center justify-between rounded-lg border border-border p-3">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Public server</p>
-                  <p className="text-xs text-muted-foreground">Show in browse list so anyone can join</p>
+      {/* Chat area */}
+      <div className="flex-1 flex flex-col">
+        <div className="p-3 border-b border-border flex items-center gap-2">
+          <Hash className="h-5 w-5 text-muted-foreground" />
+          <span className="font-semibold text-foreground">{activeChannel.name}</span>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {channelMessages.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Hash className="h-8 w-8 mx-auto mb-2 opacity-40" />
+              <p className="text-sm">No messages in #{activeChannel.name} yet</p>
+              <p className="text-xs mt-1">Be the first to say something!</p>
+            </div>
+          ) : (
+            channelMessages.map(msg => (
+              <div key={msg.id} className="flex gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-semibold text-primary shrink-0">
+                  {msg.username.slice(0, 2).toUpperCase()}
                 </div>
-                <Switch checked={!!activeServer.is_public} onCheckedChange={togglePublic} />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-foreground text-sm">{msg.username}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(msg.timestamp).toLocaleTimeString()}
+                    </span>
+                  </div>
+                  <p className="text-sm text-foreground/90">{msg.content}</p>
+                </div>
               </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setInviteOpen(false)}>Close</Button>
-            <Button variant="neon" onClick={() => { navigator.clipboard.writeText(activeServer?.invite_code || ""); toast({ title: "Invite copied", description: activeServer?.invite_code }); }}>
-              Copy code
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!banTarget} onOpenChange={(open) => { if (!open) setBanTarget(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Ban member</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">Select how long this member should be banned from the server.</p>
-            <div className="grid grid-cols-3 gap-2">
-              {[{ label: "Permanent", value: 0 }, { label: "1 day", value: 1 }, { label: "7 days", value: 7 }, { label: "30 days", value: 30 }].map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setBanDuration(option.value)}
-                  className={`rounded-lg border px-3 py-2 text-sm ${banDuration === option.value ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-foreground"}`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            <Input value={banReason} onChange={(e) => setBanReason(e.target.value)} placeholder="Reason (optional)" />
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => { setBanTarget(null); setBanDuration(0); setBanReason(""); }}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleBan}>
-              Ban member
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={chanOpen} onOpenChange={setChanOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>New channel</DialogTitle></DialogHeader>
-          <Input value={chanName} onChange={(e) => setChanName(e.target.value)} placeholder="channel-name" />
+            ))
+          )}
+        </div>
+        
+        <div className="p-3 border-t border-border">
           <div className="flex gap-2">
-            <Button variant={chanType === "text" ? "neon" : "ghost"} size="sm" onClick={() => setChanType("text")}>Text</Button>
-            <Button variant={chanType === "voice" ? "neon" : "ghost"} size="sm" onClick={() => setChanType("voice")}>Voice</Button>
+            <Input
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+              placeholder={`Message #${activeChannel.name}`}
+              className="bg-secondary/30"
+            />
+            <Button variant="neon" size="icon" onClick={sendMessage} disabled={!newMessage.trim()}>
+              <Send className="h-4 w-4" />
+            </Button>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setChanOpen(false)}>Cancel</Button>
-            <Button variant="neon" onClick={createChannel}>Create</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </div>
+
+      {/* Members sidebar */}
+      <div className="w-48 border-l border-border bg-card/30 p-3">
+        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Online - 1</p>
+        <div className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-secondary/30">
+          <div className="relative">
+            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-semibold text-primary">
+              {(user.username || 'A').slice(0, 2).toUpperCase()}
+            </div>
+            <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-card" />
+          </div>
+          <span className="text-sm text-foreground truncate">{user.username}</span>
+        </div>
+      </div>
     </div>
   );
 };

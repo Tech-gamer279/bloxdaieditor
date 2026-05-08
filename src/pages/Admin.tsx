@@ -3,15 +3,30 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { profilesApi, snippetsApi, forumApi, notifyChange } from "@/lib/demo-data";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Flag, Shield, Trash2, UserCheck, Users as UsersIcon, BarChart3, Ban } from "lucide-react";
+import { ArrowLeft, Flag, Shield, Trash2, UserCheck, Users as UsersIcon, BarChart3 } from "lucide-react";
 
 type UserRow = { user_id: string; username: string | null; rank_points: number; created_at: string };
-type Report = { id: string; reason: string; status: string; target_type: string; target_id: string; created_at: string; reporter_id: string };
 type Snip = { id: string; title: string; author_name: string; likes: number; views: number };
+
+// Store admin status in localStorage (demo mode)
+const ADMINS_KEY = 'bloxd_demo_admins';
+
+const getAdmins = (): Set<string> => {
+  try {
+    const stored = localStorage.getItem(ADMINS_KEY);
+    return stored ? new Set(JSON.parse(stored)) : new Set();
+  } catch {
+    return new Set();
+  }
+};
+
+const saveAdmins = (admins: Set<string>) => {
+  localStorage.setItem(ADMINS_KEY, JSON.stringify([...admins]));
+};
 
 const AdminPage = () => {
   const { user, loading } = useAuth();
@@ -20,7 +35,6 @@ const AdminPage = () => {
 
   const [users, setUsers] = useState<UserRow[]>([]);
   const [admins, setAdmins] = useState<Set<string>>(new Set());
-  const [reports, setReports] = useState<Report[]>([]);
   const [snippets, setSnippets] = useState<Snip[]>([]);
   const [search, setSearch] = useState("");
   const [stats, setStats] = useState({ users: 0, snippets: 0, posts: 0, openReports: 0 });
@@ -28,71 +42,78 @@ const AdminPage = () => {
   useEffect(() => {
     if (loading) return;
     if (!user) { navigate("/auth"); return; }
-    (async () => {
-      const { data } = await supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle();
-      if (!data) {
-        toast({ title: "Access denied", description: "Admin role required", variant: "destructive" });
-        navigate("/");
-        return;
-      }
+    
+    // In demo mode, first user to visit admin page becomes admin
+    const currentAdmins = getAdmins();
+    if (currentAdmins.size === 0) {
+      currentAdmins.add(user.id);
+      saveAdmins(currentAdmins);
+    }
+    
+    if (currentAdmins.has(user.id)) {
       setIsAdmin(true);
-    })();
+    } else {
+      toast({ title: "Access denied", description: "Admin role required", variant: "destructive" });
+      navigate("/");
+    }
   }, [user, loading, navigate]);
 
-  const loadAll = async () => {
-    const [u, r, s, p, ar] = await Promise.all([
-      supabase.from("profiles").select("user_id,username,rank_points,created_at").order("created_at", { ascending: false }).limit(200),
-      supabase.from("reports").select("*").order("created_at", { ascending: false }).limit(100),
-      supabase.from("snippets").select("id,title,author_name,likes,views").order("created_at", { ascending: false }).limit(100),
-      supabase.from("forum_posts").select("id", { count: "exact", head: true }),
-      supabase.from("user_roles").select("user_id").eq("role", "admin"),
-    ]);
-    setUsers((u.data || []) as UserRow[]);
-    setReports((r.data || []) as Report[]);
-    setSnippets((s.data || []) as Snip[]);
-    setAdmins(new Set((ar.data || []).map((x: any) => x.user_id)));
+  const loadAll = () => {
+    const profiles = profilesApi.getAll();
+    const allSnippets = snippetsApi.getAll();
+    const posts = forumApi.getAll();
+    const currentAdmins = getAdmins();
+    
+    setUsers(profiles.map(p => ({
+      user_id: p.user_id,
+      username: p.username,
+      rank_points: p.rank_points,
+      created_at: new Date().toISOString(), // Demo - no created_at in profiles
+    })));
+    
+    setSnippets(allSnippets.map(s => ({
+      id: s.id,
+      title: s.title,
+      author_name: s.author_name,
+      likes: s.likes,
+      views: s.views,
+    })));
+    
+    setAdmins(currentAdmins);
+    
     setStats({
-      users: u.data?.length || 0,
-      snippets: s.data?.length || 0,
-      posts: p.count || 0,
-      openReports: (r.data || []).filter((x: any) => x.status === "open").length,
+      users: profiles.length,
+      snippets: allSnippets.length,
+      posts: posts.length,
+      openReports: 0, // Demo - no reports
     });
   };
 
   useEffect(() => { if (isAdmin) loadAll(); }, [isAdmin]);
 
-  const grantAdmin = async (uid: string) => {
-    const { error } = await supabase.from("user_roles").insert({ user_id: uid, role: "admin" });
-    if (error) return toast({ title: "Failed", description: error.message, variant: "destructive" });
+  const grantAdmin = (uid: string) => {
+    const currentAdmins = getAdmins();
+    currentAdmins.add(uid);
+    saveAdmins(currentAdmins);
+    setAdmins(new Set(currentAdmins));
     toast({ title: "Granted admin role" });
-    loadAll();
   };
 
-  const revokeAdmin = async (uid: string) => {
+  const revokeAdmin = (uid: string) => {
     if (uid === user?.id) return toast({ title: "Can't revoke yourself", variant: "destructive" });
-    const { error } = await supabase.from("user_roles").delete().eq("user_id", uid).eq("role", "admin");
-    if (error) return toast({ title: "Failed", description: error.message, variant: "destructive" });
+    const currentAdmins = getAdmins();
+    currentAdmins.delete(uid);
+    saveAdmins(currentAdmins);
+    setAdmins(new Set(currentAdmins));
     toast({ title: "Admin revoked" });
-    loadAll();
   };
 
-  const resolveReport = async (id: string) => {
-    const { error } = await supabase.from("reports").update({ status: "resolved" }).eq("id", id);
-    if (error) return toast({ title: "Failed", description: error.message, variant: "destructive" });
-    loadAll();
-  };
-
-  const deleteReport = async (id: string) => {
-    await supabase.from("reports").delete().eq("id", id);
-    loadAll();
-  };
-
-  const deleteSnippet = async (id: string) => {
+  const deleteSnippet = (id: string) => {
     if (!confirm("Delete this snippet?")) return;
-    const { error } = await supabase.from("snippets").delete().eq("id", id);
-    if (error) return toast({ title: "Failed", description: error.message, variant: "destructive" });
-    toast({ title: "Snippet deleted" });
+    snippetsApi.delete(id);
+    notifyChange();
     loadAll();
+    toast({ title: "Snippet deleted" });
   };
 
   if (!user || isAdmin !== true) return null;
@@ -106,6 +127,7 @@ const AdminPage = () => {
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => navigate("/")}><ArrowLeft className="h-4 w-4 mr-1" /> Home</Button>
             <h1 className="text-lg font-bold flex items-center gap-2"><Shield className="h-5 w-5 text-primary" /> Admin Dashboard</h1>
+            <Badge variant="outline" className="text-xs">Demo Mode</Badge>
           </div>
           <Button variant="ghost" size="sm" onClick={loadAll}>Refresh</Button>
         </div>
@@ -132,7 +154,6 @@ const AdminPage = () => {
         <Tabs defaultValue="users">
           <TabsList>
             <TabsTrigger value="users"><UsersIcon className="h-4 w-4 mr-2" />Users</TabsTrigger>
-            <TabsTrigger value="reports"><Flag className="h-4 w-4 mr-2" />Reports</TabsTrigger>
             <TabsTrigger value="snippets"><BarChart3 className="h-4 w-4 mr-2" />Snippets</TabsTrigger>
           </TabsList>
 
@@ -145,7 +166,7 @@ const AdminPage = () => {
                   <div key={u.user_id} className="flex items-center justify-between p-3 gap-3">
                     <div className="min-w-0">
                       <p className="font-medium text-foreground truncate">{u.username || "anonymous"}</p>
-                      <p className="text-xs text-muted-foreground">{u.rank_points} pts • joined {new Date(u.created_at).toLocaleDateString()}</p>
+                      <p className="text-xs text-muted-foreground">{u.rank_points} pts</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {isA && <Badge variant="default">Admin</Badge>}
@@ -162,34 +183,13 @@ const AdminPage = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="reports" className="space-y-3">
-            <div className="rounded-lg border border-border bg-card divide-y divide-border">
-              {reports.map((r) => (
-                <div key={r.id} className="p-3 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant={r.status === "open" ? "destructive" : "secondary"}>{r.status}</Badge>
-                      <span className="text-xs text-muted-foreground">{r.target_type} • {new Date(r.created_at).toLocaleString()}</span>
-                    </div>
-                    <p className="text-sm text-foreground">{r.reason}</p>
-                  </div>
-                  <div className="flex gap-2 shrink-0">
-                    {r.status === "open" && <Button size="sm" variant="outline" onClick={() => resolveReport(r.id)}>Resolve</Button>}
-                    <Button size="sm" variant="ghost" onClick={() => deleteReport(r.id)}><Trash2 className="h-3 w-3" /></Button>
-                  </div>
-                </div>
-              ))}
-              {reports.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No reports</p>}
-            </div>
-          </TabsContent>
-
           <TabsContent value="snippets" className="space-y-3">
             <div className="rounded-lg border border-border bg-card divide-y divide-border">
               {snippets.map((s) => (
                 <div key={s.id} className="p-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-medium text-foreground truncate">{s.title}</p>
-                    <p className="text-xs text-muted-foreground">by {s.author_name} • {s.likes} likes • {s.views} views</p>
+                    <p className="text-xs text-muted-foreground">by {s.author_name} - {s.likes} likes - {s.views} views</p>
                   </div>
                   <Button size="sm" variant="ghost" onClick={() => deleteSnippet(s.id)}><Trash2 className="h-3 w-3 text-red-400" /></Button>
                 </div>

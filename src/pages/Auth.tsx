@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
+import { signIn, signUp, signInWithGoogle, notifyAuthChange } from "@/lib/demo-auth";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { Code2, LogIn, UserPlus, Mail, Lock, User } from "lucide-react";
@@ -22,20 +21,20 @@ const Auth = () => {
 
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { user, error } = await signIn(email, password);
         if (error) throw error;
-        navigate("/");
+        if (user) {
+          notifyAuthChange();
+          toast({ title: "Welcome back!", description: `Signed in as ${user.username}` });
+          navigate("/");
+        }
       } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { username: username || email.split("@")[0] },
-            emailRedirectTo: window.location.origin,
-          },
-        });
+        const { user, error } = await signUp(email, password, username || email.split("@")[0]);
         if (error) throw error;
-        setShowOnboarding(true);
+        if (user) {
+          notifyAuthChange();
+          setShowOnboarding(true);
+        }
       }
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -44,19 +43,19 @@ const Auth = () => {
   };
 
   const handleGoogleLogin = async () => {
+    setLoading(true);
     try {
-      const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
-      });
-      if (result.error) {
-        toast({ title: "Error", description: result.error.message, variant: "destructive" });
-        return;
+      const { user, error } = await signInWithGoogle();
+      if (error) throw error;
+      if (user) {
+        notifyAuthChange();
+        toast({ title: "Welcome!", description: `Signed in as ${user.username}` });
+        navigate("/");
       }
-      if (result.redirected) return;
-      navigate("/");
     } catch (error: any) {
-      toast({ title: "Error", description: error.message || "OAuth sign in failed", variant: "destructive" });
+      toast({ title: "Error", description: error.message || "Google sign in failed", variant: "destructive" });
     }
+    setLoading(false);
   };
 
   if (showOnboarding) {
@@ -84,6 +83,7 @@ const Auth = () => {
           variant="outline"
           className="w-full"
           onClick={handleGoogleLogin}
+          disabled={loading}
         >
           <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
@@ -154,6 +154,11 @@ const Auth = () => {
           >
             {isLogin ? "Sign up" : "Sign in"}
           </button>
+        </p>
+
+        {/* Demo notice */}
+        <p className="text-center text-xs text-muted-foreground/60 mt-4">
+          Demo mode: Data is stored locally in your browser
         </p>
       </div>
     </div>

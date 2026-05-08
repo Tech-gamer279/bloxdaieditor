@@ -3,7 +3,7 @@ import Community from "@/components/community/Community";
 import { useState } from "react";
 import NewSnippetDialog from "@/components/NewSnippetDialog";
 import type { Snippet } from "@/components/SnippetCard";
-import { supabase } from "@/integrations/supabase/client";
+import { snippetsApi, notifyChange } from "@/lib/demo-data";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 
@@ -16,15 +16,14 @@ const CommunityPage = () => {
       toast({ title: "Sign in required", description: "You need to sign in to share snippets", variant: "destructive" });
       return;
     }
-    const { error } = await supabase.from("snippets").insert({
+    snippetsApi.create({
       title: snippet.title,
       code: snippet.code,
-      author_name: snippet.author || "anonymous",
+      author_name: snippet.author || user.username || "anonymous",
       user_id: user.id,
     });
-    if (error) {
-      toast({ title: "Error", description: "Failed to share snippet", variant: "destructive" });
-    }
+    notifyChange();
+    toast({ title: "Snippet shared!", description: "Your code has been shared with the community" });
   };
 
   return (

@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { profilesApi, snippetsApi } from "@/lib/demo-data";
+import { updateProfile } from "@/lib/demo-auth";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import FriendManager from "@/components/FriendManager";
 import MediaUpload from "@/components/MediaUpload";
 import {
@@ -77,7 +77,6 @@ const ProfilePage = () => {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -92,55 +91,56 @@ const ProfilePage = () => {
     return null;
   }
 
-  const fetchProfile = async () => {
+  const fetchProfile = () => {
     if (!user) return;
-    const { data } = await supabase
-      .from("profiles")
-      .select("username, bio, avatar_url, rank_points")
-      .eq("user_id", user.id)
-      .single();
-    if (data) setProfile(data);
+    
+    // Get from demo data or use user's auth info
+    const existingProfile = profilesApi.get(user.id);
+    if (existingProfile) {
+      setProfile(existingProfile);
+    } else {
+      // Create initial profile from user data
+      const newProfile: Profile = {
+        username: user.username,
+        bio: null,
+        avatar_url: user.avatar_url || null,
+        rank_points: 10,
+      };
+      profilesApi.upsert({ user_id: user.id, ...newProfile });
+      setProfile(newProfile);
+    }
     setLoading(false);
   };
 
-  const fetchStats = async () => {
+  const fetchStats = () => {
     if (!user) return;
-    const [snippetsRes, postsRes] = await Promise.all([
-      supabase
-        .from("snippets")
-        .select("likes, views")
-        .eq("user_id", user.id),
-      supabase
-        .from("forum_posts")
-        .select("id")
-        .eq("user_id", user.id),
-    ]);
-
-    const snippets = snippetsRes.data || [];
+    
+    const snippets = snippetsApi.getAll().filter(s => s.user_id === user.id);
     setStats({
       snippetCount: snippets.length,
       totalLikes: snippets.reduce((sum, s) => sum + (s.likes || 0), 0),
       totalViews: snippets.reduce((sum, s) => sum + (s.views || 0), 0),
-      forumPosts: postsRes.data?.length || 0,
+      forumPosts: 0, // Demo - no forum posts tracked
     });
   };
 
   const handleSave = async () => {
     if (!user) return;
     setSaving(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        username: profile.username?.trim() || null,
-        bio: profile.bio?.trim() || null,
-      })
-      .eq("user_id", user.id);
-
-    if (error) {
-      toast({ title: "Error", description: "Failed to save profile", variant: "destructive" });
-    } else {
-      toast({ title: "Saved", description: "Profile updated successfully" });
-    }
+    
+    // Update in demo data
+    profilesApi.upsert({
+      user_id: user.id,
+      username: profile.username?.trim() || null,
+      bio: profile.bio?.trim() || null,
+      avatar_url: profile.avatar_url,
+      rank_points: profile.rank_points,
+    });
+    
+    // Update in auth
+    await updateProfile({ username: profile.username?.trim() || undefined });
+    
+    toast({ title: "Saved", description: "Profile updated successfully" });
     setSaving(false);
   };
 
@@ -153,31 +153,19 @@ const ProfilePage = () => {
       return;
     }
 
-    setUploading(true);
-    const ext = file.name.split(".").pop();
-    const path = `${user.id}/avatar.${ext}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from("avatars")
-      .upload(path, file, { upsert: true });
-
-    if (uploadError) {
-      toast({ title: "Upload failed", description: uploadError.message, variant: "destructive" });
-      setUploading(false);
-      return;
-    }
-
-    const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
-    const avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
-
-    await supabase
-      .from("profiles")
-      .update({ avatar_url: avatarUrl })
-      .eq("user_id", user.id);
-
+    // Create a local URL for the avatar (demo mode)
+    const avatarUrl = URL.createObjectURL(file);
+    
     setProfile((p) => ({ ...p, avatar_url: avatarUrl }));
-    toast({ title: "Avatar updated" });
-    setUploading(false);
+    profilesApi.upsert({
+      user_id: user.id,
+      username: profile.username,
+      bio: profile.bio,
+      avatar_url: avatarUrl,
+      rank_points: profile.rank_points,
+    });
+    
+    toast({ title: "Avatar updated", description: "Note: In demo mode, avatars are temporary" });
   };
 
   if (loading) {
@@ -207,14 +195,13 @@ const ProfilePage = () => {
         <div className="flex flex-col items-center gap-4">
           <div className="relative group">
             <Avatar className="h-24 w-24 border-2 border-primary/30">
-              <AvatarImage src={profile.avatar_url || undefined} />
+              <AvatarImage src={profile.avatar_url || user.avatar_url || undefined} />
               <AvatarFallback className="bg-primary/10 text-primary text-2xl">
                 <User className="h-10 w-10" />
               </AvatarFallback>
             </Avatar>
             <button
               onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
               className="absolute inset-0 rounded-full bg-background/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
             >
               <Camera className="h-6 w-6 text-foreground" />
@@ -230,12 +217,12 @@ const ProfilePage = () => {
 
           <div className="text-center">
             <p className="text-xl font-bold text-foreground">
-              {profile.username || user?.email || "Anonymous"}
+              {profile.username || user.username || user.email || "Anonymous"}
             </p>
             <div className="flex items-center justify-center gap-2 mt-1">
               <Trophy className={`h-4 w-4 ${rankColor}`} />
               <span className={`text-sm font-semibold ${rankColor}`}>{rank}</span>
-              <span className="text-xs text-muted-foreground">• {profile.rank_points} pts</span>
+              <span className="text-xs text-muted-foreground">- {profile.rank_points} pts</span>
             </div>
           </div>
         </div>

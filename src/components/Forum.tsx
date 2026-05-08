@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { forumApi, profilesApi, subscribe, notifyChange } from "@/lib/demo-data";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,28 @@ type ForumReply = {
   created_at: string;
 };
 
+// Store replies in localStorage
+const REPLIES_KEY = 'bloxd_demo_forum_replies';
+
+const getReplies = (postId: string): ForumReply[] => {
+  try {
+    const stored = localStorage.getItem(REPLIES_KEY);
+    const all = stored ? JSON.parse(stored) : [];
+    return all.filter((r: ForumReply) => r.post_id === postId);
+  } catch {
+    return [];
+  }
+};
+
+const addReply = (reply: ForumReply) => {
+  try {
+    const stored = localStorage.getItem(REPLIES_KEY);
+    const all = stored ? JSON.parse(stored) : [];
+    all.push(reply);
+    localStorage.setItem(REPLIES_KEY, JSON.stringify(all));
+  } catch {}
+};
+
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -47,43 +69,28 @@ const Forum = () => {
   const [replyContent, setReplyContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const fetchPosts = async () => {
-    const { data } = await supabase
-      .from("forum_posts")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (data) setPosts(data);
+  const fetchPosts = () => {
+    const data = forumApi.getAll();
+    setPosts(data);
   };
 
-  const fetchReplies = async (postId: string) => {
-    const { data } = await supabase
-      .from("forum_replies")
-      .select("*")
-      .eq("post_id", postId)
-      .order("created_at", { ascending: true });
-    if (data) setReplies(data);
+  const fetchReplies = (postId: string) => {
+    const data = getReplies(postId);
+    setReplies(data);
   };
 
   useEffect(() => {
     fetchPosts();
-    const channel = supabase
-      .channel("forum-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "forum_posts" }, () => fetchPosts())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const unsubscribe = subscribe(fetchPosts);
+    return () => { unsubscribe(); };
   }, []);
 
   useEffect(() => {
     if (!selectedPost) return;
     fetchReplies(selectedPost.id);
-    const channel = supabase
-      .channel(`forum-replies-${selectedPost.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "forum_replies", filter: `post_id=eq.${selectedPost.id}` }, () => fetchReplies(selectedPost.id))
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
   }, [selectedPost]);
 
-  const handleCreatePost = async () => {
+  const handleCreatePost = () => {
     if (!user) {
       toast({ title: "Sign in required", description: "Sign in to create forum posts", variant: "destructive" });
       return;
@@ -99,24 +106,24 @@ const Forum = () => {
       return;
     }
     setSubmitting(true);
-    const { data: profile } = await supabase.from("profiles").select("username").eq("user_id", user.id).maybeSingle();
-    const { error } = await supabase.from("forum_posts").insert({
+    
+    const profile = profilesApi.get(user.id);
+    forumApi.create({
       title,
       content,
       user_id: user.id,
-      author_name: profile?.username || "anonymous",
+      author_name: profile?.username || user.username || "anonymous",
     });
+    
+    setNewTitle("");
+    setNewContent("");
+    setShowNew(false);
     setSubmitting(false);
-    if (error) {
-      toast({ title: "Error", description: "Failed to create post", variant: "destructive" });
-    } else {
-      setNewTitle("");
-      setNewContent("");
-      setShowNew(false);
-    }
+    notifyChange();
+    toast({ title: "Post created!", description: "Your post is now visible in the forum" });
   };
 
-  const handleReply = async () => {
+  const handleReply = () => {
     if (!user || !selectedPost) {
       toast({ title: "Sign in required", description: "Sign in to reply", variant: "destructive" });
       return;
@@ -128,19 +135,22 @@ const Forum = () => {
       return;
     }
     setSubmitting(true);
-    const { data: profile } = await supabase.from("profiles").select("username").eq("user_id", user.id).maybeSingle();
-    const { error } = await supabase.from("forum_replies").insert({
+    
+    const profile = profilesApi.get(user.id);
+    const newReply: ForumReply = {
+      id: Math.random().toString(36).substring(2) + Date.now().toString(36),
       post_id: selectedPost.id,
       content,
       user_id: user.id,
-      author_name: profile?.username || "anonymous",
-    });
+      author_name: profile?.username || user.username || "anonymous",
+      created_at: new Date().toISOString(),
+    };
+    
+    addReply(newReply);
+    setReplies(prev => [...prev, newReply]);
+    setReplyContent("");
     setSubmitting(false);
-    if (error) {
-      toast({ title: "Error", description: "Failed to reply", variant: "destructive" });
-    } else {
-      setReplyContent("");
-    }
+    toast({ title: "Reply posted!" });
   };
 
   // Post detail view

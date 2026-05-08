@@ -9,7 +9,7 @@ import Leaderboard from "@/components/Leaderboard";
 import Forum from "@/components/Forum";
 import Community from "@/components/community/Community";
 import { Code2, Sparkles, Trophy, MessageSquare, Users, ImagePlus, UserPlus, BookOpen } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { snippetsApi, subscribe, notifyChange } from "@/lib/demo-data";
 import { useAuth } from "@/contexts/AuthContext";
 import MediaUpload from "@/components/MediaUpload";
 import FriendManager from "@/components/FriendManager";
@@ -23,38 +23,26 @@ const Index = () => {
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [activeTab, setActiveTab] = useState<"snippets" | "ai" | "ranks" | "forum" | "community" | "media" | "friends" | "update-log">("snippets");
 
-  const fetchSnippets = async () => {
-    const { data } = await supabase
-      .from("snippets")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (data) {
-      setSnippets(
-        data.map((s) => ({
-          id: s.id,
-          title: s.title,
-          code: s.code,
-          author: s.author_name,
-          likes: s.likes,
-          views: s.views,
-          createdAt: s.created_at,
-          userId: s.user_id,
-        }))
-      );
-    }
+  const fetchSnippets = () => {
+    const data = snippetsApi.getAll();
+    setSnippets(
+      data.map((s) => ({
+        id: s.id,
+        title: s.title,
+        code: s.code,
+        author: s.author_name,
+        likes: s.likes,
+        views: s.views,
+        createdAt: s.created_at,
+        userId: s.user_id,
+      }))
+    );
   };
 
   useEffect(() => {
     fetchSnippets();
-
-    const channel = supabase
-      .channel("snippets-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "snippets" }, () => {
-        fetchSnippets();
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    const unsubscribe = subscribe(fetchSnippets);
+    return () => { unsubscribe(); };
   }, []);
 
   const handleNewSnippet = async (snippet: Snippet) => {
@@ -62,15 +50,14 @@ const Index = () => {
       toast({ title: "Sign in required", description: "You need to sign in to share snippets", variant: "destructive" });
       return;
     }
-    const { error } = await supabase.from("snippets").insert({
+    snippetsApi.create({
       title: snippet.title,
       code: snippet.code,
-      author_name: snippet.author || "anonymous",
+      author_name: snippet.author || user.username || "anonymous",
       user_id: user.id,
     });
-    if (error) {
-      toast({ title: "Error", description: "Failed to share snippet", variant: "destructive" });
-    }
+    notifyChange();
+    toast({ title: "Snippet shared!", description: "Your code has been shared with the community" });
   };
 
   return (
@@ -78,7 +65,7 @@ const Index = () => {
       <Header onNewSnippet={() => setShowNewDialog(true)} />
 
       <main className="container px-4 py-6">
-        <div className="flex gap-2 mb-6">
+        <div className="flex flex-wrap gap-2 mb-6">
           <button
             onClick={() => setActiveTab("snippets")}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${

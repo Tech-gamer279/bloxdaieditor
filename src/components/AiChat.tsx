@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Send, Bot, User, Sparkles, Copy, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -28,7 +28,154 @@ const CopyButton = ({ text }: { text: string }) => {
   );
 };
 
+// Demo AI responses for Bloxd code questions
+const getDemoResponse = (question: string): string => {
+  const q = question.toLowerCase();
+  
+  if (q.includes("spawn") && q.includes("block")) {
+    return `Here's a block spawner script for Bloxd:
+
+\`\`\`javascript
+// Block Spawner Script
+function spawnBlock(type, x, y, z) {
+  game.createBlock({
+    position: { x, y, z },
+    type: type || "stone"
+  });
+}
+
+// Spawn blocks in a pattern
+function spawnBlockGrid(size, blockType) {
+  for (let x = 0; x < size; x++) {
+    for (let z = 0; z < size; z++) {
+      spawnBlock(blockType, x * 2, 10, z * 2);
+    }
+  }
+}
+
+// Usage: spawnBlockGrid(5, "cobblestone");
+\`\`\`
+
+This script creates blocks at specified positions. You can customize the block type and spawn patterns!`;
+  }
+  
+  if (q.includes("jump") || q.includes("boost")) {
+    return `Here's a jump boost power-up script:
+
+\`\`\`javascript
+// Jump Boost Power-up
+function giveJumpBoost(player, multiplier = 2, duration = 10000) {
+  const originalJump = player.jumpPower;
+  player.jumpPower *= multiplier;
+  
+  player.sendMessage("Jump boost activated!");
+  
+  setTimeout(() => {
+    player.jumpPower = originalJump;
+    player.sendMessage("Jump boost expired!");
+  }, duration);
+}
+
+// Double jump boost for 15 seconds
+giveJumpBoost(currentPlayer, 2, 15000);
+\`\`\`
+
+You can adjust the multiplier and duration to balance the power-up!`;
+  }
+  
+  if (q.includes("chat") || q.includes("command")) {
+    return `Here's a custom chat commands system:
+
+\`\`\`javascript
+// Custom Chat Commands Handler
+const commands = {
+  help: (player) => {
+    player.sendMessage("Available commands: /help, /tp, /give, /heal");
+  },
+  tp: (player, args) => {
+    const [x, y, z] = args.map(Number);
+    if (isNaN(x) || isNaN(y) || isNaN(z)) {
+      player.sendMessage("Usage: /tp <x> <y> <z>");
+      return;
+    }
+    player.teleport(x, y, z);
+    player.sendMessage(\`Teleported to \${x}, \${y}, \${z}\`);
+  },
+  heal: (player) => {
+    player.health = player.maxHealth;
+    player.sendMessage("You have been healed!");
+  }
+};
+
+game.on('chat', (message, player) => {
+  if (!message.startsWith('/')) return;
+  
+  const [cmd, ...args] = message.slice(1).split(' ');
+  const handler = commands[cmd.toLowerCase()];
+  
+  if (handler) {
+    handler(player, args);
+  } else {
+    player.sendMessage("Unknown command. Type /help for a list.");
+  }
+});
+\`\`\``;
+  }
+  
+  if (q.includes("teleport") || q.includes("tp")) {
+    return `Here's a teleportation script:
+
+\`\`\`javascript
+// Teleportation System
+function teleportPlayer(player, destination) {
+  // Save previous position for undo
+  player.lastPosition = { ...player.position };
+  
+  player.teleport(destination.x, destination.y, destination.z);
+  player.sendMessage(\`Teleported to \${destination.x}, \${destination.y}, \${destination.z}\`);
+}
+
+// Create teleport pads
+function createTeleportPad(position, destination) {
+  const pad = game.createBlock({
+    position,
+    type: "gold_block"
+  });
+  
+  game.on('playerStep', (player, block) => {
+    if (block.id === pad.id) {
+      teleportPlayer(player, destination);
+    }
+  });
+}
+
+// Usage
+createTeleportPad(
+  { x: 0, y: 10, z: 0 },      // Pad location
+  { x: 100, y: 50, z: 100 }   // Destination
+);
+\`\`\``;
+  }
+  
+  // Default response
+  return `I can help you write Bloxd code! Here are some things I can help with:
+
+- **Block spawning** - Create blocks at positions
+- **Player abilities** - Jump boosts, speed, health
+- **Chat commands** - Custom /commands system
+- **Teleportation** - Move players around the map
+- **Game mechanics** - Scoring, timers, events
+
+Try asking something like:
+- "Create a block spawner script"
+- "How do I add jump boost?"
+- "Make a custom chat command system"
+
+I'll generate working code examples for you!`;
+};
+
 const AiChat = () => {
+  const { user } = useAuth();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -40,71 +187,38 @@ const AiChat = () => {
 
   const send = async () => {
     if (!input.trim() || isLoading) return;
+    
+    if (!user) {
+      toast({ title: "Sign in required", description: "Please sign in to use the AI assistant", variant: "destructive" });
+      return;
+    }
+    
     const userMsg: Msg = { role: "user", content: input.trim() };
-    const allMessages = [...messages, userMsg];
-    setMessages(allMessages);
+    setMessages(prev => [...prev, userMsg]);
     setInput("");
     setIsLoading(true);
 
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Please sign in to use the AI assistant.");
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/bloxd-ai`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({ messages: allMessages }),
+    // Simulate AI thinking delay
+    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
+    
+    const response = getDemoResponse(input.trim());
+    
+    // Simulate streaming by adding characters gradually
+    let currentResponse = "";
+    const chars = response.split("");
+    
+    for (let i = 0; i < chars.length; i += 5) {
+      currentResponse += chars.slice(i, i + 5).join("");
+      setMessages(prev => {
+        const last = prev[prev.length - 1];
+        if (last?.role === "assistant") {
+          return prev.map((m, idx) => idx === prev.length - 1 ? { ...m, content: currentResponse } : m);
         }
-      );
-
-      if (!resp.ok || !resp.body) {
-        if (resp.status === 429) throw new Error("Rate limited. Please wait a moment.");
-        if (resp.status === 402) throw new Error("AI credits exhausted. Please add funds.");
-        throw new Error("AI request failed");
-      }
-
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let assistantSoFar = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        let idx: number;
-        while ((idx = buffer.indexOf("\n")) !== -1) {
-          let line = buffer.slice(0, idx);
-          buffer = buffer.slice(idx + 1);
-          if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (!line.startsWith("data: ")) continue;
-          const json = line.slice(6).trim();
-          if (json === "[DONE]") break;
-          try {
-            const parsed = JSON.parse(json);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              assistantSoFar += content;
-              setMessages((prev) => {
-                const last = prev[prev.length - 1];
-                if (last?.role === "assistant") {
-                  return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: assistantSoFar } : m));
-                }
-                return [...prev, { role: "assistant", content: assistantSoFar }];
-              });
-            }
-          } catch {}
-        }
-      }
-    } catch (e: any) {
-      setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${e.message}` }]);
+        return [...prev, { role: "assistant", content: currentResponse }];
+      });
+      await new Promise(resolve => setTimeout(resolve, 20));
     }
+    
     setIsLoading(false);
   };
 
@@ -113,6 +227,7 @@ const AiChat = () => {
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-secondary/30">
         <Sparkles className="h-4 w-4 text-accent" />
         <span className="font-semibold text-sm text-foreground">Bloxd AI Coder</span>
+        <span className="ml-auto text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">Demo Mode</span>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-3 min-h-[280px]">
