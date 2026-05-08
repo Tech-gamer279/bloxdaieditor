@@ -3,6 +3,7 @@ import { eq, desc, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { forumPostsTable, forumRepliesTable, profilesTable } from "@workspace/db";
 import { requireAuth, type AuthedRequest } from "../middlewares/requireAuth";
+import { createNotification } from "../lib/notify";
 
 const router: IRouter = Router();
 
@@ -49,6 +50,20 @@ router.post("/forum/posts/:id/replies", requireAuth, async (req, res): Promise<v
   const authorName = profile?.username || "anonymous";
   const [reply] = await db.insert(forumRepliesTable).values({ postId, userId, authorName, content: content.trim() }).returning();
   await db.update(forumPostsTable).set({ replyCount: sql`${forumPostsTable.replyCount} + 1` }).where(eq(forumPostsTable.id, postId));
+
+  // Notify the post owner
+  const [post] = await db.select().from(forumPostsTable).where(eq(forumPostsTable.id, postId));
+  if (post) {
+    await createNotification({
+      type: "forum_reply",
+      actorUserId: userId,
+      actorName: authorName,
+      targetUserId: post.userId,
+      resourceId: post.id,
+      resourceTitle: post.title,
+    });
+  }
+
   res.status(201).json(reply);
 });
 

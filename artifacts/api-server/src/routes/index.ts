@@ -8,6 +8,7 @@ import forumRouter from "./forum";
 import schematicsRouter from "./schematics";
 import modsRouter from "./mods";
 import badgesRouter from "./badges";
+import notificationsRouter from "./notifications";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(forumRouter);
 router.use(schematicsRouter);
 router.use(modsRouter);
 router.use(badgesRouter);
+router.use(notificationsRouter);
 
 export default router;

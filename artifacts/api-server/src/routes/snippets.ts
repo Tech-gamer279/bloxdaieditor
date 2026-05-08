@@ -3,6 +3,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { snippetsTable, snippetLikesTable, profilesTable } from "@workspace/db";
 import { requireAuth, optionalAuth, type AuthedRequest } from "../middlewares/requireAuth";
+import { createNotification } from "../lib/notify";
 
 const router: IRouter = Router();
 
@@ -55,6 +56,21 @@ router.post("/snippets/:id/like", requireAuth, async (req, res): Promise<void> =
     await db.update(snippetsTable)
       .set({ likes: sql`${snippetsTable.likes} + 1` })
       .where(eq(snippetsTable.id, snippetId));
+
+    // Notify the snippet owner
+    const [snippet] = await db.select().from(snippetsTable).where(eq(snippetsTable.id, snippetId));
+    if (snippet) {
+      const [liker] = await db.select().from(profilesTable).where(eq(profilesTable.userId, userId));
+      await createNotification({
+        type: "snippet_like",
+        actorUserId: userId,
+        actorName: liker?.username ?? null,
+        targetUserId: snippet.userId,
+        resourceId: snippet.id,
+        resourceTitle: snippet.title,
+      });
+    }
+
     res.json({ liked: true });
   }
 });

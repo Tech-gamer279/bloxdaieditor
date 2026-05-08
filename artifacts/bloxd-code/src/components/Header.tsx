@@ -4,6 +4,7 @@ import { Code2, Plus, LogIn, LogOut, User, Settings, ShieldCheck, Users } from "
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "wouter";
 import SettingsDialog from "@/components/SettingsDialog";
+import NotificationBell from "@/components/NotificationBell";
 
 interface HeaderProps {
   onNewSnippet: () => void;
@@ -34,6 +35,7 @@ const Header = ({ onNewSnippet }: HeaderProps) => {
               <span className="text-xs text-muted-foreground hidden sm:inline">
                 {user.username || user.email}
               </span>
+              <NotificationBell />
               <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)}>
                 <Settings className="h-4 w-4" />
               </Button>

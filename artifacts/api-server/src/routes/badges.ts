@@ -3,21 +3,22 @@ import { eq, and } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { badgesTable, userBadgesTable, adminsTable } from "@workspace/db";
 import { requireAuth, type AuthedRequest } from "../middlewares/requireAuth";
+import { createNotification } from "../lib/notify";
 
 const router: IRouter = Router();
 
 async function isAdmin(userId: string): Promise<boolean> {
+  const envAdmin = process.env.ADMIN_USER_ID;
+  if (envAdmin) return userId === envAdmin;
   const rows = await db.select().from(adminsTable).where(eq(adminsTable.userId, userId));
   return rows.length > 0;
 }
 
-// Get all badge definitions
 router.get("/badges", async (_req, res): Promise<void> => {
   const badges = await db.select().from(badgesTable);
   res.json(badges);
 });
 
-// Create a new badge (admin only)
 router.post("/badges", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as AuthedRequest).clerkUserId;
   if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin required" }); return; }
@@ -34,7 +35,6 @@ router.post("/badges", requireAuth, async (req, res): Promise<void> => {
   }
 });
 
-// Update badge (admin only)
 router.put("/badges/:id", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as AuthedRequest).clerkUserId;
   if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin required" }); return; }
@@ -50,7 +50,6 @@ router.put("/badges/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(badge);
 });
 
-// Delete a badge (admin only)
 router.delete("/badges/:id", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as AuthedRequest).clerkUserId;
   if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin required" }); return; }
@@ -59,7 +58,6 @@ router.delete("/badges/:id", requireAuth, async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
-// Get all badges for a user (with badge details)
 router.get("/badges/user/:userId", async (req, res): Promise<void> => {
   const targetUserId = req.params.userId as string;
   const userBadges = await db.select().from(userBadgesTable).where(eq(userBadgesTable.userId, targetUserId));
@@ -69,7 +67,6 @@ router.get("/badges/user/:userId", async (req, res): Promise<void> => {
   res.json(userBadges.map((ub) => ({ ...ub, badge: badgeMap.get(ub.badgeId) })).filter((ub) => ub.badge));
 });
 
-// Grant a badge to a user (admin only)
 router.post("/badges/grant", requireAuth, async (req, res): Promise<void> => {
   const grantedBy = (req as AuthedRequest).clerkUserId;
   if (!(await isAdmin(grantedBy))) { res.status(403).json({ error: "Admin required" }); return; }
@@ -80,10 +77,22 @@ router.post("/badges/grant", requireAuth, async (req, res): Promise<void> => {
   );
   if (existing.length) { res.status(409).json({ error: "User already has this badge" }); return; }
   const [ub] = await db.insert(userBadgesTable).values({ userId: user_id, badgeId: badge_id, grantedBy }).returning();
+
+  // Notify the recipient
+  const [badge] = await db.select().from(badgesTable).where(eq(badgesTable.id, badge_id));
+  if (badge) {
+    await createNotification({
+      type: "badge_granted",
+      actorUserId: grantedBy,
+      targetUserId: user_id,
+      resourceId: badge.id,
+      resourceTitle: `${badge.emoji ?? ""} ${badge.name}`.trim(),
+    });
+  }
+
   res.status(201).json(ub);
 });
 
-// Revoke a badge from a user (admin only)
 router.delete("/badges/revoke/:userBadgeId", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as AuthedRequest).clerkUserId;
   if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin required" }); return; }
