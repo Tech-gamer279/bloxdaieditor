@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { snippetsTable, snippetLikesTable, profilesTable } from "@workspace/db";
 import { requireAuth, optionalAuth, type AuthedRequest } from "../middlewares/requireAuth";
@@ -28,28 +28,42 @@ router.post("/snippets", requireAuth, async (req, res): Promise<void> => {
   const authorName = profile[0]?.username || author_name || "anonymous";
 
   const [snippet] = await db.insert(snippetsTable).values({ userId, authorName, title: title.trim(), code: code.trim() }).returning();
-  await db.insert(profilesTable).values({ userId, rankPoints: 10 }).onConflictDoUpdate({ target: profilesTable.userId, set: { rankPoints: (profilesTable.rankPoints as any) + 5 } }).catch(() => {});
+  await db.insert(profilesTable)
+    .values({ userId, rankPoints: 10 })
+    .onConflictDoUpdate({
+      target: profilesTable.userId,
+      set: { rankPoints: sql`${profilesTable.rankPoints} + 5` },
+    })
+    .catch(() => {});
   res.status(201).json({ ...snippet, liked: false });
 });
 
 router.post("/snippets/:id/like", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as AuthedRequest).clerkUserId;
   const snippetId = req.params.id as string;
-  const existing = await db.select().from(snippetLikesTable).where(and(eq(snippetLikesTable.snippetId, snippetId), eq(snippetLikesTable.userId, userId)));
+  const existing = await db.select().from(snippetLikesTable).where(
+    and(eq(snippetLikesTable.snippetId, snippetId), eq(snippetLikesTable.userId, userId))
+  );
   if (existing.length) {
     await db.delete(snippetLikesTable).where(eq(snippetLikesTable.id, existing[0].id));
-    await db.update(snippetsTable).set({ likes: (snippetsTable.likes as any) - 1 } as any).where(and(eq(snippetsTable.id, snippetId), (snippetsTable.likes as any) > 0));
+    await db.update(snippetsTable)
+      .set({ likes: sql`GREATEST(${snippetsTable.likes} - 1, 0)` })
+      .where(eq(snippetsTable.id, snippetId));
     res.json({ liked: false });
   } else {
     await db.insert(snippetLikesTable).values({ snippetId, userId });
-    await db.update(snippetsTable).set({ likes: (snippetsTable.likes as any) + 1 } as any).where(eq(snippetsTable.id, snippetId));
+    await db.update(snippetsTable)
+      .set({ likes: sql`${snippetsTable.likes} + 1` })
+      .where(eq(snippetsTable.id, snippetId));
     res.json({ liked: true });
   }
 });
 
 router.post("/snippets/:id/view", async (req, res): Promise<void> => {
   const id = req.params.id as string;
-  await db.update(snippetsTable).set({ views: (snippetsTable.views as any) + 1 } as any).where(eq(snippetsTable.id, id));
+  await db.update(snippetsTable)
+    .set({ views: sql`${snippetsTable.views} + 1` })
+    .where(eq(snippetsTable.id, id));
   res.sendStatus(204);
 });
 

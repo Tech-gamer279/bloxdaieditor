@@ -52,7 +52,9 @@ router.post("/community/servers/join", requireAuth, async (req, res): Promise<vo
   if (!invite_code) { res.status(400).json({ error: "Missing invite_code" }); return; }
   const [server] = await db.select().from(serversTable).where(eq(serversTable.inviteCode, invite_code));
   if (!server) { res.status(404).json({ error: "Server not found" }); return; }
-  const existing = await db.select().from(serverMembersTable).where(and(eq(serverMembersTable.serverId, server.id), eq(serverMembersTable.userId, userId)));
+  const existing = await db.select().from(serverMembersTable).where(
+    and(eq(serverMembersTable.serverId, server.id), eq(serverMembersTable.userId, userId))
+  );
   if (!existing.length) {
     await db.insert(serverMembersTable).values({ serverId: server.id, userId, role: "member" });
   }
@@ -62,18 +64,32 @@ router.post("/community/servers/join", requireAuth, async (req, res): Promise<vo
 router.post("/community/servers/:serverId/leave", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as AuthedRequest).clerkUserId;
   const serverId = req.params.serverId as string;
-  await db.delete(serverMembersTable).where(and(eq(serverMembersTable.serverId, serverId), eq(serverMembersTable.userId, userId)));
+  await db.delete(serverMembersTable).where(
+    and(eq(serverMembersTable.serverId, serverId), eq(serverMembersTable.userId, userId))
+  );
   res.sendStatus(204);
 });
 
-router.get("/community/servers/:serverId/channels", async (req, res): Promise<void> => {
+router.get("/community/servers/:serverId/channels", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthedRequest).clerkUserId;
   const serverId = req.params.serverId as string;
+  const membership = await db.select().from(serverMembersTable).where(
+    and(eq(serverMembersTable.serverId, serverId), eq(serverMembersTable.userId, userId))
+  );
+  if (!membership.length) { res.status(403).json({ error: "Not a member" }); return; }
   const channels = await db.select().from(channelsTable).where(eq(channelsTable.serverId, serverId));
   res.json(channels);
 });
 
 router.post("/community/servers/:serverId/channels", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthedRequest).clerkUserId;
   const serverId = req.params.serverId as string;
+  const membership = await db.select().from(serverMembersTable).where(
+    and(eq(serverMembersTable.serverId, serverId), eq(serverMembersTable.userId, userId))
+  );
+  if (!membership.length || !["owner", "admin"].includes(membership[0].role)) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
   const { name, type } = req.body as { name?: string; type?: string };
   if (!name?.trim()) { res.status(400).json({ error: "Missing name" }); return; }
   const existing = await db.select().from(channelsTable).where(eq(channelsTable.serverId, serverId));
@@ -81,18 +97,30 @@ router.post("/community/servers/:serverId/channels", requireAuth, async (req, re
   res.status(201).json(ch);
 });
 
-router.get("/community/servers/:serverId/members", async (req, res): Promise<void> => {
+router.get("/community/servers/:serverId/members", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthedRequest).clerkUserId;
   const serverId = req.params.serverId as string;
+  const membership = await db.select().from(serverMembersTable).where(
+    and(eq(serverMembersTable.serverId, serverId), eq(serverMembersTable.userId, userId))
+  );
+  if (!membership.length) { res.status(403).json({ error: "Not a member" }); return; }
   const members = await db.select().from(serverMembersTable).where(eq(serverMembersTable.serverId, serverId));
   res.json(members);
 });
 
 // ── Messages ──────────────────────────────────────────────────────────────────
 
-router.get("/community/channels/:channelId/messages", async (req, res): Promise<void> => {
+router.get("/community/channels/:channelId/messages", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthedRequest).clerkUserId;
   const channelId = req.params.channelId as string;
+  const [channel] = await db.select().from(channelsTable).where(eq(channelsTable.id, channelId));
+  if (!channel) { res.status(404).json({ error: "Channel not found" }); return; }
+  const membership = await db.select().from(serverMembersTable).where(
+    and(eq(serverMembersTable.serverId, channel.serverId), eq(serverMembersTable.userId, userId))
+  );
+  if (!membership.length) { res.status(403).json({ error: "Not a member" }); return; }
   const { before, limit = "50" } = req.query as { before?: string; limit?: string };
-  let msgs: typeof messagesTable.$inferSelect[];
+  let msgs: (typeof messagesTable.$inferSelect)[];
   if (before) {
     const [ref] = await db.select().from(messagesTable).where(eq(messagesTable.id, before));
     if (ref) {
@@ -113,6 +141,12 @@ router.get("/community/channels/:channelId/messages", async (req, res): Promise<
 router.post("/community/channels/:channelId/messages", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as AuthedRequest).clerkUserId;
   const channelId = req.params.channelId as string;
+  const [channel] = await db.select().from(channelsTable).where(eq(channelsTable.id, channelId));
+  if (!channel) { res.status(404).json({ error: "Channel not found" }); return; }
+  const membership = await db.select().from(serverMembersTable).where(
+    and(eq(serverMembersTable.serverId, channel.serverId), eq(serverMembersTable.userId, userId))
+  );
+  if (!membership.length) { res.status(403).json({ error: "Not a member" }); return; }
   const { author_name, content } = req.body as { author_name?: string; content?: string };
   if (!content?.trim()) { res.status(400).json({ error: "Missing content" }); return; }
   const [msg] = await db.insert(messagesTable).values({
@@ -131,7 +165,7 @@ router.delete("/community/messages/:messageId", requireAuth, async (req, res): P
   res.sendStatus(204);
 });
 
-router.get("/community/messages/reactions", async (req, res): Promise<void> => {
+router.get("/community/messages/reactions", optionalAuth, async (req, res): Promise<void> => {
   const { ids } = req.query as { ids?: string };
   if (!ids) { res.json([]); return; }
   const idList = ids.split(",").filter(Boolean);
@@ -149,7 +183,11 @@ router.post("/community/messages/:messageId/reactions", requireAuth, async (req,
   const { emoji } = req.body as { emoji?: string };
   if (!emoji) { res.status(400).json({ error: "Missing emoji" }); return; }
   const existing = await db.select().from(messageReactionsTable).where(
-    and(eq(messageReactionsTable.messageId, messageId), eq(messageReactionsTable.userId, userId), eq(messageReactionsTable.emoji, emoji))
+    and(
+      eq(messageReactionsTable.messageId, messageId),
+      eq(messageReactionsTable.userId, userId),
+      eq(messageReactionsTable.emoji, emoji),
+    )
   );
   if (existing.length) {
     await db.delete(messageReactionsTable).where(eq(messageReactionsTable.id, existing[0].id));
@@ -182,7 +220,9 @@ router.get("/community/dm/:userId", requireAuth, async (req, res): Promise<void>
   const { other_id } = req.query as { other_id?: string };
   if (!other_id) { res.status(400).json({ error: "Missing other_id" }); return; }
   const [a, b] = [userId, other_id].sort();
-  let convs = await db.select().from(dmConversationsTable).where(and(eq(dmConversationsTable.userA, a), eq(dmConversationsTable.userB, b)));
+  let convs = await db.select().from(dmConversationsTable).where(
+    and(eq(dmConversationsTable.userA, a), eq(dmConversationsTable.userB, b))
+  );
   if (!convs.length) {
     const [conv] = await db.insert(dmConversationsTable).values({ userA: a, userB: b }).returning();
     convs = [conv];
@@ -191,8 +231,14 @@ router.get("/community/dm/:userId", requireAuth, async (req, res): Promise<void>
 });
 
 router.get("/community/dm/conversation/:conversationId/messages", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthedRequest).clerkUserId;
   const conversationId = req.params.conversationId as string;
-  const msgs = await db.select().from(dmMessagesTable).where(eq(dmMessagesTable.conversationId, conversationId)).orderBy(dmMessagesTable.createdAt);
+  const [conv] = await db.select().from(dmConversationsTable).where(eq(dmConversationsTable.id, conversationId));
+  if (!conv) { res.status(404).json({ error: "Not found" }); return; }
+  if (conv.userA !== userId && conv.userB !== userId) { res.status(403).json({ error: "Forbidden" }); return; }
+  const msgs = await db.select().from(dmMessagesTable)
+    .where(eq(dmMessagesTable.conversationId, conversationId))
+    .orderBy(dmMessagesTable.createdAt);
   res.json(msgs);
 });
 
@@ -201,14 +247,24 @@ router.post("/community/dm/conversation/:conversationId/messages", requireAuth, 
   const conversationId = req.params.conversationId as string;
   const { content } = req.body as { content?: string };
   if (!content?.trim()) { res.status(400).json({ error: "Missing content" }); return; }
+  const [conv] = await db.select().from(dmConversationsTable).where(eq(dmConversationsTable.id, conversationId));
+  if (!conv) { res.status(404).json({ error: "Not found" }); return; }
+  if (conv.userA !== userId && conv.userB !== userId) { res.status(403).json({ error: "Forbidden" }); return; }
   const [msg] = await db.insert(dmMessagesTable).values({ conversationId, userId, content: content.trim() }).returning();
   res.status(201).json(msg);
 });
 
 // ── Voice ────────────────────────────────────────────────────────────────────
 
-router.get("/community/voice/:channelId/participants", async (req, res): Promise<void> => {
+router.get("/community/voice/:channelId/participants", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as AuthedRequest).clerkUserId;
   const channelId = req.params.channelId as string;
+  const [channel] = await db.select().from(channelsTable).where(eq(channelsTable.id, channelId));
+  if (!channel) { res.status(404).json({ error: "Channel not found" }); return; }
+  const membership = await db.select().from(serverMembersTable).where(
+    and(eq(serverMembersTable.serverId, channel.serverId), eq(serverMembersTable.userId, userId))
+  );
+  if (!membership.length) { res.status(403).json({ error: "Not a member" }); return; }
   const participants = await db.select().from(voiceParticipantsTable).where(eq(voiceParticipantsTable.channelId, channelId));
   res.json(participants);
 });
@@ -217,7 +273,9 @@ router.post("/community/voice/:channelId/join", requireAuth, async (req, res): P
   const userId = (req as AuthedRequest).clerkUserId;
   const channelId = req.params.channelId as string;
   const { username } = req.body as { username?: string };
-  await db.delete(voiceParticipantsTable).where(and(eq(voiceParticipantsTable.channelId, channelId), eq(voiceParticipantsTable.userId, userId)));
+  await db.delete(voiceParticipantsTable).where(
+    and(eq(voiceParticipantsTable.channelId, channelId), eq(voiceParticipantsTable.userId, userId))
+  );
   const [p] = await db.insert(voiceParticipantsTable).values({ channelId, userId, username: username || null }).returning();
   res.status(201).json(p);
 });
@@ -225,7 +283,9 @@ router.post("/community/voice/:channelId/join", requireAuth, async (req, res): P
 router.delete("/community/voice/:channelId/leave/:userId", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as AuthedRequest).clerkUserId;
   const channelId = req.params.channelId as string;
-  await db.delete(voiceParticipantsTable).where(and(eq(voiceParticipantsTable.channelId, channelId), eq(voiceParticipantsTable.userId, userId)));
+  await db.delete(voiceParticipantsTable).where(
+    and(eq(voiceParticipantsTable.channelId, channelId), eq(voiceParticipantsTable.userId, userId))
+  );
   res.sendStatus(204);
 });
 
